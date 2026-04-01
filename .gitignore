@@ -1,0 +1,33 @@
+# Secrets
+config/.env
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Logs
+logs/*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+/tmp/
+*.ogg
+*.mp3
+
+# Memory usage logs (contain cost data, not secrets, but large)
+memory/usage/
