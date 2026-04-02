@@ -34,7 +34,7 @@ def test_sanitize_output_anthropic_key():
 
 
 def test_sanitize_output_github_token():
-    text = "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 is secret"
+    text = "ghp_" + "a" * 36 + " is secret"  # fake token for test
     result = sanitize_output(text)
     assert "ghp_" not in result
     assert "[REDACTED]" in result
