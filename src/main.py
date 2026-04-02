@@ -20,11 +20,16 @@ from src.tools.contacts_tools import register_contacts_tools
 from src.tools.deutsch_tools import register_deutsch_tools
 from src.tools.drive_tools import register_drive_tools
 from src.tools.maps_tools import register_maps_tools
+from src.brain.context_gatherer import ContextGatherer
+from src.integrations.apple_health import HealthDataReader
 from src.tools.fitness_tools import register_fitness_tools
 from src.tools.github_tools import register_github_tools
 from src.tools.gmail_tools import register_gmail_tools
+from src.tools.group_tools import register_group_tools
 from src.tools.registry import ToolRegistry
 from src.tools.vault_tools import register_vault_tools
+from src.tools.web_tools import register_web_tools
+from src.transport.group_logger import GroupLogger
 from src.transport.telegram_bot import TelegramBot
 from src.transport.telegram_policy import load_policy_from_json
 from src.utils.approval import ApprovalManager
@@ -84,7 +89,7 @@ def main() -> None:
     )
 
     tool_registry = ToolRegistry()
-    conversations = ConversationStore()
+    conversations = ConversationStore(persist_dir=str(project_root / "memory" / "conversations"))
 
     # --- Зависимости для tools ---
     vault = VaultAdapter(settings.obsidian_root)
@@ -100,17 +105,31 @@ def main() -> None:
     approval = ApprovalManager()
 
     # --- Регистрация всех tools ---
-    register_vault_tools(tool_registry, vault)
+    register_vault_tools(tool_registry, vault, approval, settings.timezone)
     register_calendar_tools(tool_registry, google, settings.timezone)
     register_gmail_tools(tool_registry, google, approval)
     register_contacts_tools(tool_registry, google)
-    register_drive_tools(tool_registry, google)
+    register_drive_tools(tool_registry, google, approval)
     register_maps_tools(tool_registry, settings.google_maps_api_key)
     register_github_tools(tool_registry, settings.github_token)
-    register_fitness_tools(tool_registry, settings.obsidian_root, settings.timezone)
+    health_reader = HealthDataReader(os.path.expanduser(settings.apple_health_export_dir))
+    register_fitness_tools(tool_registry, settings.obsidian_root, settings.timezone, health_reader)
     register_deutsch_tools(tool_registry, settings.obsidian_root)
     register_admin_tools(tool_registry, cost_tracker, conversations)
+    register_web_tools(tool_registry, settings.serper_api_key)
+
+    policy = load_policy_from_json(str(project_root / "config" / "policy.json"))
+    logger.info("Policy loaded. owner=%d, groups=%d", policy.owner_id, len(policy.groups))
+
+    group_logger = GroupLogger(log_dir=str(project_root / "logs" / "groups"))
+    register_group_tools(tool_registry, group_logger, policy)
     logger.info("Tools registered: %d", tool_registry.tool_count())
+
+    context_gatherer = ContextGatherer(
+        fitness_dir=str(project_root / "memory" / "fitness"),
+        dashboard_path=str(Path(settings.obsidian_root) / "ДАШБОРД.md"),
+        health_reader=health_reader,
+    )
 
     engine = AnthropicEngine(
         api_key=settings.anthropic_api_key,
@@ -121,10 +140,8 @@ def main() -> None:
         timezone=settings.timezone,
         cost_tracker=cost_tracker,
         conversations=conversations,
+        context_gatherer=context_gatherer,
     )
-
-    policy = load_policy_from_json(str(project_root / "config" / "policy.json"))
-    logger.info("Policy loaded. owner=%d, groups=%d", policy.owner_id, len(policy.groups))
 
     stt_key = settings.stt_api_key or settings.groq_api_key
     bot = TelegramBot(
@@ -134,6 +151,10 @@ def main() -> None:
         policy=policy,
         stt_api_key=stt_key,
         stt_provider=settings.stt_provider,
+        group_logger=group_logger,
+        tts_api_key=settings.elevenlabs_api_key,
+        tts_voice_id=settings.elevenlabs_voice_id,
+        tts_model=settings.elevenlabs_model,
     )
 
     logger.info("Starting Telegram bot... (tools=%d)", tool_registry.tool_count())

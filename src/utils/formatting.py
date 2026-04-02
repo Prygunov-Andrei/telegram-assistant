@@ -44,6 +44,23 @@ RU_MONTHS = {
 }
 
 
+def strip_html(html: str) -> str:
+    """Convert HTML to plain text. Shared utility for email body and web scraping."""
+    text = re.sub(r"<br\s*/?>", "\n", html, flags=re.IGNORECASE)
+    text = re.sub(r"</p>", "\n\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</div>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = re.sub(r"&nbsp;", " ", text)
+    text = re.sub(r"&amp;", "&", text)
+    text = re.sub(r"&lt;", "<", text)
+    text = re.sub(r"&gt;", ">", text)
+    text = re.sub(r"&quot;", '"', text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 def display_due(due_iso: str) -> str:
     dt = datetime.strptime(due_iso, "%Y-%m-%d")
     return f"{dt.day} {RU_MONTHS[dt.month]} ({RU_WEEKDAYS[dt.weekday()]})"

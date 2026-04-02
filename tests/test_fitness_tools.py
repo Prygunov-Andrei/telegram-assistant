@@ -57,4 +57,4 @@ def test_get_fitness_summary_empty(tmp_path: Path):
 def test_fitness_tools_count(tmp_path: Path):
     registry = ToolRegistry()
     register_fitness_tools(registry, str(tmp_path), "Europe/Berlin")
-    assert registry.tool_count() == 3
+    assert registry.tool_count() == 9  # 4 manual (log_workout, log_meal, read_fitness_log, get_fitness_summary) + 5 Apple Health

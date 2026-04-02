@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import base64
+import email.utils
 import functools
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -27,7 +29,7 @@ CONTACTS_SCOPES = [
 ]
 
 DRIVE_SCOPES = [
-    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/drive",
 ]
 
 
@@ -98,21 +100,215 @@ class GoogleServices:
     # --- Gmail ---
 
     def gmail_search(self, query: str, max_results: int = 10) -> list[dict[str, Any]]:
-        data = self._gmail_service.users().messages().list(userId="me", q=query, maxResults=max_results).execute()
+        data = self._gmail_service.users().messages().list(
+            userId="me", q=query, maxResults=max_results
+        ).execute()
         messages = data.get("messages", [])
         result = []
         for msg in messages:
-            full = self._gmail_service.users().messages().get(userId="me", id=msg["id"], format="metadata").execute()
+            full = self._gmail_service.users().messages().get(
+                userId="me", id=msg["id"], format="metadata",
+                metadataHeaders=["Subject", "From", "Date"],
+            ).execute()
             headers = full.get("payload", {}).get("headers", [])
             mapped = {h.get("name", "").lower(): h.get("value", "") for h in headers}
-            result.append({"id": msg["id"], "subject": mapped.get("subject", ""), "from": mapped.get("from", "")})
+            labels = full.get("labelIds", [])
+            result.append({
+                "id": msg["id"],
+                "subject": mapped.get("subject", ""),
+                "from": mapped.get("from", ""),
+                "date": mapped.get("date", ""),
+                "snippet": full.get("snippet", ""),
+                "is_unread": "UNREAD" in labels,
+                "has_attachments": bool(self._list_attachments(full.get("payload", {}))),
+            })
         return result
 
+    def gmail_get_message(self, message_id: str) -> dict[str, Any]:
+        full = self._gmail_service.users().messages().get(
+            userId="me", id=message_id, format="full"
+        ).execute()
+        headers = {
+            h["name"].lower(): h["value"]
+            for h in full.get("payload", {}).get("headers", [])
+        }
+        body = self._extract_body(full.get("payload", {}))
+        attachments = self._list_attachments(full.get("payload", {}))
+        labels = full.get("labelIds", [])
+        return {
+            "id": message_id,
+            "thread_id": full.get("threadId", ""),
+            "subject": headers.get("subject", ""),
+            "from": headers.get("from", ""),
+            "to": headers.get("to", ""),
+            "cc": headers.get("cc", ""),
+            "date": headers.get("date", ""),
+            "message_id_header": headers.get("message-id", ""),
+            "snippet": full.get("snippet", ""),
+            "body": body[:10_000],
+            "labels": labels,
+            "is_unread": "UNREAD" in labels,
+            "attachments": attachments,
+        }
+
+    def _extract_body(self, payload: dict) -> str:
+        """Рекурсивное извлечение текста из email payload."""
+        mime = payload.get("mimeType", "")
+        parts = payload.get("parts", [])
+
+        # Простое сообщение без частей
+        if not parts:
+            data = payload.get("body", {}).get("data", "")
+            if data:
+                text = base64.urlsafe_b64decode(data)
+                charset = self._get_charset(payload)
+                decoded = text.decode(charset, errors="replace")
+                if "html" in mime:
+                    return self._trim_quoted(self._strip_html(decoded))
+                return self._trim_quoted(decoded)
+            return ""
+
+        # Multipart — ищем text/plain, fallback на text/html
+        plain = ""
+        html = ""
+        for part in parts:
+            part_mime = part.get("mimeType", "")
+            if part_mime == "text/plain":
+                data = part.get("body", {}).get("data", "")
+                if data:
+                    charset = self._get_charset(part)
+                    plain = base64.urlsafe_b64decode(data).decode(charset, errors="replace")
+            elif part_mime == "text/html":
+                data = part.get("body", {}).get("data", "")
+                if data:
+                    charset = self._get_charset(part)
+                    html = base64.urlsafe_b64decode(data).decode(charset, errors="replace")
+            elif "multipart" in part_mime:
+                # Рекурсия для nested multipart
+                nested = self._extract_body(part)
+                if nested:
+                    return nested
+
+        if plain:
+            return self._trim_quoted(plain)
+        if html:
+            return self._trim_quoted(self._strip_html(html))
+        return ""
+
+    @staticmethod
+    def _get_charset(part: dict) -> str:
+        for header in part.get("headers", []):
+            if header.get("name", "").lower() == "content-type":
+                val = header.get("value", "")
+                match = re.search(r"charset=[\"']?([^\s;\"']+)", val, re.IGNORECASE)
+                if match:
+                    return match.group(1)
+        return "utf-8"
+
+    @staticmethod
+    def _strip_html(html: str) -> str:
+        from src.utils.formatting import strip_html
+        return strip_html(html)
+
+    @staticmethod
+    def _trim_quoted(text: str) -> str:
+        lines = text.split("\n")
+        result = []
+        in_quote = False
+        for line in lines:
+            stripped = line.strip()
+            if re.match(r"^On .+ wrote:$", stripped):
+                result.append("[цитата обрезана]")
+                break
+            if stripped.startswith(">"):
+                if not in_quote:
+                    in_quote = True
+                    result.append("[цитата обрезана]")
+                continue
+            in_quote = False
+            result.append(line)
+        return "\n".join(result)
+
+    def _list_attachments(self, payload: dict) -> list[dict[str, Any]]:
+        attachments: list[dict[str, Any]] = []
+        self._collect_attachments(payload, attachments)
+        return attachments
+
+    def _collect_attachments(self, part: dict, out: list[dict[str, Any]]) -> None:
+        filename = part.get("filename", "")
+        body = part.get("body", {})
+        if filename and body.get("attachmentId"):
+            out.append({
+                "filename": filename,
+                "mimeType": part.get("mimeType", ""),
+                "size": body.get("size", 0),
+                "attachmentId": body["attachmentId"],
+            })
+        for sub in part.get("parts", []):
+            self._collect_attachments(sub, out)
+
+    def gmail_get_attachment(self, message_id: str, attachment_id: str, size_limit: int = 5 * 1024 * 1024) -> bytes:
+        data = (
+            self._gmail_service.users().messages().attachments()
+            .get(userId="me", id=attachment_id, messageId=message_id)
+            .execute()
+        )
+        raw = data.get("data", "")
+        decoded = base64.urlsafe_b64decode(raw)
+        if len(decoded) > size_limit:
+            raise ValueError(f"Attachment too large: {len(decoded)} bytes (limit {size_limit})")
+        return decoded
+
     def gmail_send(self, to_email: str, subject: str, body: str) -> str:
-        raw = f"To: {to_email}\r\nSubject: {subject}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n{body}"
+        raw = (
+            f"To: {to_email}\r\n"
+            f"Subject: {subject}\r\n"
+            f"Content-Type: text/plain; charset=utf-8\r\n"
+            f"\r\n{body}"
+        )
         encoded = base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8")
-        out = self._gmail_service.users().messages().send(userId="me", body={"raw": encoded}).execute()
+        out = self._gmail_service.users().messages().send(
+            userId="me", body={"raw": encoded}
+        ).execute()
         return out.get("id", "")
+
+    def gmail_reply(self, message_id: str, body: str) -> str:
+        original = self.gmail_get_message(message_id)
+        thread_id = original["thread_id"]
+        orig_msg_id = original["message_id_header"]
+        subject = original["subject"]
+        if not subject.lower().startswith("re:"):
+            subject = f"Re: {subject}"
+        to = original["from"]
+
+        raw = (
+            f"To: {to}\r\n"
+            f"Subject: {subject}\r\n"
+            f"In-Reply-To: {orig_msg_id}\r\n"
+            f"References: {orig_msg_id}\r\n"
+            f"Content-Type: text/plain; charset=utf-8\r\n"
+            f"\r\n{body}"
+        )
+        encoded = base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8")
+        out = self._gmail_service.users().messages().send(
+            userId="me", body={"raw": encoded, "threadId": thread_id}
+        ).execute()
+        return out.get("id", "")
+
+    def gmail_forward(self, message_id: str, to_email: str) -> str:
+        original = self.gmail_get_message(message_id)
+        fwd_body = (
+            f"---------- Forwarded message ----------\n"
+            f"From: {original['from']}\n"
+            f"Date: {original['date']}\n"
+            f"Subject: {original['subject']}\n"
+            f"To: {original['to']}\n\n"
+            f"{original['body']}"
+        )
+        subject = original["subject"]
+        if not subject.lower().startswith("fwd:"):
+            subject = f"Fwd: {subject}"
+        return self.gmail_send(to_email, subject, fwd_body)
 
     def gmail_archive(self, message_id: str) -> None:
         self._gmail_service.users().messages().modify(
@@ -121,6 +317,16 @@ class GoogleServices:
 
     def gmail_delete(self, message_id: str) -> None:
         self._gmail_service.users().messages().delete(userId="me", id=message_id).execute()
+
+    def gmail_mark_read(self, message_id: str) -> None:
+        self._gmail_service.users().messages().modify(
+            userId="me", id=message_id, body={"removeLabelIds": ["UNREAD"]}
+        ).execute()
+
+    def gmail_mark_unread(self, message_id: str) -> None:
+        self._gmail_service.users().messages().modify(
+            userId="me", id=message_id, body={"addLabelIds": ["UNREAD"]}
+        ).execute()
 
     # --- Calendar ---
 
@@ -226,3 +432,47 @@ class GoogleServices:
             .execute()
         )
         return data.get("files", [])
+
+    def drive_upload_file(
+        self, content: bytes, filename: str,
+        mime_type: str = "application/octet-stream",
+        folder_id: str = "root",
+    ) -> dict[str, str]:
+        from googleapiclient.http import MediaInMemoryUpload
+        media = MediaInMemoryUpload(content, mimetype=mime_type)
+        metadata: dict[str, Any] = {"name": filename, "parents": [folder_id]}
+        f = self._drive_service.files().create(
+            body=metadata, media_body=media, fields="id,webViewLink",
+        ).execute()
+        return {"id": f["id"], "webViewLink": f.get("webViewLink", "")}
+
+    def drive_create_folder(self, name: str, parent_id: str = "root") -> dict[str, str]:
+        metadata: dict[str, Any] = {
+            "name": name,
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents": [parent_id],
+        }
+        f = self._drive_service.files().create(
+            body=metadata, fields="id,webViewLink",
+        ).execute()
+        return {"id": f["id"], "webViewLink": f.get("webViewLink", "")}
+
+    def drive_move_file(self, file_id: str, new_parent_id: str) -> None:
+        f = self._drive_service.files().get(fileId=file_id, fields="parents").execute()
+        old_parents = ",".join(f.get("parents", []))
+        self._drive_service.files().update(
+            fileId=file_id,
+            addParents=new_parent_id,
+            removeParents=old_parents,
+        ).execute()
+
+    def drive_get_link(self, file_id: str) -> str:
+        f = self._drive_service.files().get(
+            fileId=file_id, fields="webViewLink",
+        ).execute()
+        return f.get("webViewLink", "")
+
+    def drive_delete_file(self, file_id: str) -> None:
+        self._drive_service.files().update(
+            fileId=file_id, body={"trashed": True},
+        ).execute()

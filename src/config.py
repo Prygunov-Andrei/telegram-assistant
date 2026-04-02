@@ -34,6 +34,17 @@ class Settings(BaseSettings):
     # GitHub
     github_token: str = ""
 
+    # Web Search (Serper.dev)
+    serper_api_key: str = ""
+
+    # ElevenLabs TTS
+    elevenlabs_api_key: str = ""
+    elevenlabs_voice_id: str = "cgSgspJ2msm6clMCkdW9"  # Ivan — deep calm Russian male
+    elevenlabs_model: str = "eleven_multilingual_v2"
+
+    # Apple Health
+    apple_health_export_dir: str = "~/Library/Mobile Documents/iCloud~com~ifunography~HealthExport/Documents"
+
     # General
     timezone: str = "Europe/Berlin"
 

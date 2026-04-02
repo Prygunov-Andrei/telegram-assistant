@@ -1,5 +1,146 @@
 {
   "owner_id": 435926703,
   "dm_allow_from": [],
-  "groups": []
+  "groups": [
+    {
+      "chat_id": -5055663499,
+      "require_mention": false,
+      "allow_from": [],
+      "mode": "interactive",
+      "title": "Создание Сайта (GT24)"
+    },
+    {
+      "chat_id": -1003800155962,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "monitoring",
+      "title": "РУКОВОДСТВО АВГУСТ"
+    },
+    {
+      "chat_id": -4890389457,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "monitoring",
+      "title": "СОВЕЩАНИЕ Руководителей отделов"
+    },
+    {
+      "chat_id": -1002315255157,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "МЕШОК МОНТАЖНИКОВ"
+    },
+    {
+      "chat_id": -1001745834443,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "Август-климат Chat"
+    },
+    {
+      "chat_id": -1002781446554,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "ТА ЦРБ Коломна"
+    },
+    {
+      "chat_id": -4910946837,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "126 Больница Озера СС"
+    },
+    {
+      "chat_id": -5267776841,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "Рабочая ЦРБ Волоколамск"
+    },
+    {
+      "chat_id": -4731542054,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "ПВ ЦРБ Озеры"
+    },
+    {
+      "chat_id": -1002493683400,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "Гостиница-инсайдер"
+    },
+    {
+      "chat_id": -1002285294706,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "ВОК Дзержинский"
+    },
+    {
+      "chat_id": -4880003721,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "123 Больница Озеры Вент"
+    },
+    {
+      "chat_id": -1002910432795,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "137/138 Волоколамск ОВ/К/СС"
+    },
+    {
+      "chat_id": -4813005623,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "АВГУСТ - Проект и Смета Больница Озеры"
+    },
+    {
+      "chat_id": -4603760260,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "112, 113 Жуковский кнд вент сс"
+    },
+    {
+      "chat_id": -1001876167843,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "РАЗДОРЫ (ПРИМАКОВА)"
+    },
+    {
+      "chat_id": -1002582446316,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "ТА ВОК 550+200 Балашиха"
+    },
+    {
+      "chat_id": -5081101519,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "123 Озера КНД"
+    },
+    {
+      "chat_id": -4961553597,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "132 Михнево СС"
+    },
+    {
+      "chat_id": -1001491613841,
+      "require_mention": false,
+      "allow_from": [435926703],
+      "mode": "logging",
+      "title": "Август-климат (КАНАЛ)"
+    }
+  ]
 }

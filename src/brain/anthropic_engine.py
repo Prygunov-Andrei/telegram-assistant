@@ -7,6 +7,7 @@ from typing import Any
 
 import anthropic
 
+from src.brain.context_gatherer import ContextGatherer
 from src.brain.conversation import ConversationStore
 from src.brain.model_router import choose_model
 from src.brain.system_prompt import build_system_prompt
@@ -30,6 +31,7 @@ class AnthropicEngine:
     timezone: str
     cost_tracker: CostTracker
     conversations: ConversationStore
+    context_gatherer: ContextGatherer | None = None
 
     def __post_init__(self) -> None:
         self._client = anthropic.Anthropic(api_key=self.api_key)
@@ -50,6 +52,16 @@ class AnthropicEngine:
         logger.info("model_route=%s reason=%s chat=%d", route.model, route.reason, chat_id)
 
         system = build_system_prompt(self.memory, self.timezone)
+
+        # Авто-контекст: подгружаем релевантные данные в system prompt
+        if self.context_gatherer:
+            auto_ctx = self.context_gatherer.gather(user_text)
+            if auto_ctx:
+                system.append({
+                    "type": "text",
+                    "text": f"АКТУАЛЬНЫЕ ДАННЫЕ (подгружены автоматически, используй для ответа):\n\n{auto_ctx}",
+                })
+
         tools = self.tool_registry.get_definitions()
 
         for round_num in range(MAX_TOOL_ROUNDS):
@@ -76,6 +88,7 @@ class AnthropicEngine:
             conv.add_assistant_response(response.content)
 
             if response.stop_reason == "end_turn":
+                self.conversations.save(chat_id)
                 return self._extract_text(response)
 
             if response.stop_reason == "tool_use":
@@ -133,6 +146,7 @@ class AnthropicEngine:
             conv.add_assistant_response(response.content)
 
             if response.stop_reason == "end_turn":
+                self.conversations.save(chat_id)
                 return self._extract_text(response)
 
             if response.stop_reason == "tool_use":
