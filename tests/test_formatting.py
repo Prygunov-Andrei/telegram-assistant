@@ -27,7 +27,7 @@ def test_split_message_paragraphs():
 
 
 def test_sanitize_output_anthropic_key():
-    text = "Key is sk-ant-api03-wZ6cP3zDmhbaHVj2klgccaaL0lK1WTvWvdVBiH4AO8k end"
+    text = "Key is sk-ant-" + "x" * 40 + " end"  # fake key for test
     result = sanitize_output(text)
     assert "sk-ant" not in result
     assert "[REDACTED]" in result
