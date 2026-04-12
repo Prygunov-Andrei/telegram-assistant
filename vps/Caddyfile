@@ -1,0 +1,18 @@
+hvac-news.online {
+    handle /api/* {
+        reverse_proxy localhost:8443
+    }
+
+    handle /app* {
+        header Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        header Pragma "no-cache"
+        header Expires "0"
+        reverse_proxy localhost:8443
+    }
+
+    handle {
+        respond "Task WebApp" 200
+    }
+
+    tls /etc/letsencrypt/live/hvac-news.online/fullchain.pem /etc/letsencrypt/live/hvac-news.online/privkey.pem
+}

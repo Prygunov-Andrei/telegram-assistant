@@ -31,3 +31,5 @@ Thumbs.db
 
 # Memory usage logs (contain cost data, not secrets, but large)
 memory/usage/
+.playwright-mcp/
+logs/

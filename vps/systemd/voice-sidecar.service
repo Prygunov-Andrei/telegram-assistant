@@ -1,0 +1,12 @@
+[Unit]
+Description=Voice Sidecar (transcript echo + delete)
+After=openclaw-gateway.service
+
+[Service]
+ExecStart=/usr/bin/python3 /root/voice-sidecar/main.py
+Restart=always
+RestartSec=5
+Environment=HOME=/root
+
+[Install]
+WantedBy=default.target

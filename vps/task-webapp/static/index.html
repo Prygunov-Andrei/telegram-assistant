@@ -1,0 +1,1988 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Задачи</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root, html, body {
+    color-scheme: dark;
+    --bg: #1c1c1e !important;
+    --bg-secondary: #2c2c2e !important;
+    --bg-tertiary: #3a3a3c !important;
+    --text: #ffffff !important;
+    --text-secondary: #aeaeb2 !important;
+    --accent: #0a84ff !important;
+    --accent-hover: #409cff !important;
+    --green: #4CAF50 !important;
+    --orange: #ff9f0a !important;
+    --red: #ff453a !important;
+    --yellow: #ffd60a !important;
+    --border: #38383a !important;
+    --sidebar-width: 250px !important;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    font-size: 14px;
+  }
+
+  /* ── Layout ────────────────────────────── */
+  .app-container {
+    display: flex;
+    height: 100vh;
+    width: 100%;
+  }
+
+  /* ── Sidebar ───────────────────────────── */
+  .sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .sidebar-header {
+    padding-top: 60px;
+    padding: 16px;
+    font-size: 20px;
+    font-weight: 700;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .project-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+
+  .project-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .project-item:hover { background: var(--bg-tertiary); }
+  .project-item.active { background: var(--accent); color: white; }
+  .project-item.active .project-count { color: white; background: transparent; }
+
+  .project-name { font-size: 17px; font-weight: 500; }
+
+  .project-count {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 24px;
+    text-align: right;
+    padding: 4px 6px;
+  }
+
+  
+  .sidebar-filters select { font-size: 16px; padding: 10px 14px; }
+  .sidebar-filters label { font-size: 15px; font-weight: 600; }
+
+  .sidebar-filters {
+    border-top: 1px solid var(--border);
+    padding: 12px 16px;
+  }
+
+  .filter-group label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
+  }
+
+  .filter-group select {
+    width: 100%;
+    background: var(--bg-tertiary);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  /* ── Main content ──────────────────────── */
+  .main-content {
+    background: var(--bg) !important;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .top-bar { min-height: 60px; padding-top: 8px; 
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+  }
+
+  .top-bar-title { font-size: 26px; font-weight: 700; }
+
+  .top-bar-actions { display: flex; gap: 8px; }
+
+  .btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.15s;
+  }
+
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--bg-tertiary); color: var(--text); }
+  .btn-secondary:hover { background: var(--border); }
+
+  /* ── Bottom nav (views) ────────────────── */
+  .bottom-nav {
+    display: flex;
+    border-top: 1px solid var(--border);
+    background: var(--bg-secondary);
+  }
+
+  .nav-tab {
+    flex: 1;
+    padding: 10px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all 0.15s;
+    border: none;
+    background: none;
+  }
+
+  .nav-tab.active { color: var(--accent); font-weight: 700; }
+  .nav-tab:hover { color: var(--text); }
+
+  /* ── Task table ────────────────────────── */
+  .content-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+  }
+
+  .task-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .task-table thead { position: sticky; top: 0; z-index: 10; }
+
+  .task-table th {
+    background: var(--bg-secondary);
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  .task-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    vertical-align: middle;
+  }
+
+  .task-table tbody tr { transition: background 0.1s; }
+  .task-table tbody tr:hover { background: var(--bg-secondary); }
+
+  .task-id { color: var(--text-secondary); font-size: 14px; font-weight: 600; }
+
+  .task-title {
+    font-weight: 500;
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Status badges ─────────────────────── */
+  .status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.15s;
+  }
+
+  .status-badge:hover { opacity: 0.8; }
+
+  .status-todo { background: #3a3a3c; color: #aeaeb2; }
+  .status-in_progress { background: #ff9f0a33; color: #ff9f0a; }
+  .status-done { background: #4CAF5033; color: #4CAF50; }
+  .status-cancelled { background: #ff453a33; color: #ff453a; }
+
+  .status-dropdown {
+    position: absolute;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    overflow: hidden;
+    z-index: 100;
+  }
+
+  .status-option {
+    display: block;
+    width: 100%;
+    padding: 8px 16px;
+    border: none;
+    background: none;
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .status-option:hover { background: var(--bg-tertiary); }
+
+  /* ── Due date ──────────────────────────── */
+  .due-cell { white-space: nowrap; }
+  .due-overdue { color: var(--red); font-weight: 600; }
+  .due-today { color: var(--orange); font-weight: 600; }
+  .due-soon { color: var(--yellow); }
+  .due-future { color: var(--text-secondary); }
+
+  .due-date-input {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    width: 110px;
+  }
+
+  .due-date-input::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+  }
+
+  .project-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .assignee-cell {
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+
+  /* ── Week view ─────────────────────────── */
+  .week-view {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    background: var(--border);
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .week-day {
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .week-day-header {
+    padding: 8px 10px;
+    font-size: 14px;
+    font-weight: 600;
+    background: var(--bg-secondary);
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .week-day-header.today {
+    color: var(--accent);
+    background: rgba(10,132,255,0.1);
+  }
+
+  .week-day-tasks {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+  }
+
+  .week-task {
+    padding: 6px 8px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    margin-bottom: 4px;
+    font-size: 14px;
+    border-left: 3px solid var(--accent);
+    cursor: default;
+  }
+
+  .week-task.status-done-card { border-left-color: var(--green); opacity: 0.5; }
+  .week-task.status-in_progress-card { border-left-color: var(--orange); }
+
+  .week-task-id { color: var(--text-secondary); font-size: 10px; }
+  .week-task-title { font-weight: 500; margin-top: 2px; line-height: 1.3; }
+
+  .no-due-section {
+    padding: 12px;
+    background: var(--bg);
+    min-width: 200px;
+    border-left: 1px solid var(--border);
+  }
+
+  .no-due-header {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    text-align: center;
+  }
+
+  /* ── Create modal ──────────────────────── */
+  .modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  .modal {
+    background: var(--bg-secondary);
+    border-radius: 16px;
+    padding: 24px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  }
+
+  .modal h2 {
+    font-size: 20px;
+    margin-bottom: 20px;
+  }
+
+  .form-group {
+    margin-bottom: 16px;
+  }
+
+  .form-group label {
+    display: block;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+
+  .form-group input,
+  .form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 14px;
+  }
+
+  .form-group input:focus,
+  .form-group select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 24px;
+  }
+
+  /* ── Loading ───────────────────────────── */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+    font-size: 16px;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 10px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Empty state ───────────────────────── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+    gap: 8px;
+  }
+
+  .empty-state-icon { font-size: 48px; opacity: 0.3; }
+  .empty-state-text { font-size: 16px; }
+
+  /* ── Phone responsive ──────────────────── */
+  @media (max-width: 768px) {
+    .sidebar {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      z-index: 500;
+      width: 280px;
+    }
+
+    .sidebar.open { display: flex; }
+
+    .sidebar-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 499;
+    }
+
+    .menu-toggle { display: block !important; }
+
+    .task-table th:nth-child(5),
+    .task-table td:nth-child(5),
+    .task-table th:nth-child(6),
+    .task-table td:nth-child(6) {
+      display: none;
+    }
+
+    .task-title { max-width: 200px; }
+
+    .week-view {
+      grid-template-columns: repeat(3, 1fr);
+      overflow-y: auto;
+    }
+  }
+
+  .menu-toggle {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px 8px;
+  }
+
+  /* ── Toast notification ────────────────── */
+  .toast {
+    position: fixed;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--green);
+    color: white;
+    padding: 10px 24px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 13px;
+    z-index: 2000;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .toast.visible { opacity: 1; }
+  .toast.error { background: var(--red); }
+
+  /* ── Swipe to delete ─────────────────── */
+  .task-row-wrapper {
+    position: relative;
+    overflow: hidden;
+  }
+  .task-row-wrapper .delete-bg {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 100px;
+    background: var(--red);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 1;
+    border-radius: 0 8px 8px 0;
+  }
+  .task-row-wrapper.swiped-left .delete-bg {
+    opacity: 1;
+  }
+  .task-row-wrapper .cancel-bg {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 120px;
+    background: var(--orange);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 1;
+    border-radius: 8px 0 0 8px;
+  }
+  .task-row-wrapper.swiped-right .cancel-bg {
+    opacity: 1;
+  }
+
+  .task-row-wrapper .task-row-inner {
+    position: relative;
+    z-index: 2;
+    background: var(--bg);
+    transition: transform 0.2s ease;
+  }
+  .task-row-wrapper.swiped-left .task-row-inner {
+    transform: translateX(-100px);
+  }
+  .task-row-wrapper.swiped-right .task-row-inner {
+    transform: translateX(120px);
+  }
+  
+    transform: translateX(-100px);
+  }
+
+
+  /* ── Two-panel sidebar ─────────────────── */
+  .tag-panel {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    background: var(--bg-tertiary);
+    border-right: 1px solid var(--border);
+    display: none;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .tag-panel.open {
+    display: flex;
+  }
+  .tag-panel-header {
+    padding: 80px 16px 12px 16px;
+    font-size: 18px;
+    font-weight: 700;
+    border-bottom: 1px solid var(--border);
+  }
+  .tag-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+  .tag-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 17px;
+  }
+  .tag-item:hover { background: var(--bg-secondary); }
+  .tag-item.active { background: var(--accent); color: white; }
+  .tag-item .tag-name { font-weight: 500; }
+  .tag-item .tag-count {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 28px;
+    text-align: right;
+    padding: 4px 6px;
+  }
+  .tag-item.active .tag-count { background: rgba(255,255,255,0.2); }
+
+
+  /* ── Slider nav ─────────────────────── */
+  .slider-bar {
+    position: relative;
+    height: 56px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-shrink: 0;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .slider-labels {
+    display: flex;
+    width: 100%;
+    height: 100%;
+  }
+  .slider-labels span {
+    flex: 1;
+    cursor: pointer;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    opacity: 0.5;
+  }
+  .slider-btn {
+    position: absolute;
+    top: 4px;
+    height: 48px;
+    width: 25%;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 800;
+    color: white;
+    cursor: pointer;
+    z-index: 2;
+    letter-spacing: 0.3px;
+    transition: left 0.2s ease, background 0.2s ease;
+    touch-action: none;
+  }
+
+
+  html, body {
+    background: #1c1c1e !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100vw;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    background-color: #1c1c1e !important;
+  }
+  .app-container {
+    background: #1c1c1e !important;
+    min-height: 100vh;
+  }
+</style>
+</head>
+<body>
+
+<div class="app-container">
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header" style="height:80px"></div>
+    <div class="project-list" id="projectList"></div>
+    <div class="sidebar-filters">
+      <div class="filter-group">
+        <label>Статус</label>
+        <select id="filterStatus" onchange="loadTasks()">
+          <option value="">Все открытые</option>
+          <option value="todo">Todo</option>
+          <option value="in_progress">В работе</option>
+          <option value="done">Выполнено</option>
+          <option value="cancelled">Отменено</option>
+        </select>
+      </div>
+    </div>
+  </aside>
+
+    <!-- Tag panel (second column) -->
+  <aside class="tag-panel" id="tagPanel">
+    <div id="tagPanelHeader" style="height:80px"></div>
+    <div class="tag-list" id="tagList"></div>
+  </aside>
+
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()" style="display:none;"></div>
+
+  <!-- Main -->
+  <div class="main-content">
+    <div class="top-bar">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="menu-toggle" id="menuToggle" onclick="toggleSidebar()">&#9776;</button>
+        <span class="top-bar-title" id="topBarTitle">Все задачи</span>
+      </div>
+      <div class="top-bar-actions">
+      </div>
+    </div>
+
+    <div class="content-area" id="contentArea">
+      <div class="loading"><div class="spinner"></div>Загрузка...</div>
+    </div>
+
+    <div class="slider-bar" id="sliderBar">
+      <div class="slider-labels">
+        <span ontouchend="event.preventDefault();sliderMoveTo(0)" onclick="sliderMoveTo(0)">ПУЛ</span>
+        <span ontouchend="event.preventDefault();sliderMoveTo(1)" onclick="sliderMoveTo(1)">ПУШ</span>
+        <span ontouchend="event.preventDefault();sliderMoveTo(2)" onclick="sliderMoveTo(2)">Создать</span>
+        <span ontouchend="event.preventDefault();sliderMoveTo(3)" onclick="sliderMoveTo(3)">ЗАПИСЬ!</span>
+      </div>
+      <div class="slider-btn" id="sliderBtn"
+        ontouchstart="sliderTouchStart(event)"
+        ontouchmove="sliderTouchMove(event)"
+        ontouchend="sliderTouchEnd(event)"
+        style="left:75%;background:#e53935">ЗАПИСЬ!</div>
+    </div>
+  </div>
+</div>
+
+<!-- Status dropdown (hidden, repositioned on click) -->
+<div class="status-dropdown" id="statusDropdown" style="display:none;">
+  <button class="status-option" onclick="setStatus('todo')">Todo</button>
+  <button class="status-option" onclick="setStatus('in_progress')">В работе</button>
+  <button class="status-option" onclick="setStatus('done')">Выполнено</button>
+  <button class="status-option" onclick="setStatus('cancelled')">Отменено</button>
+</div>
+
+<!-- Create modal -->
+<div class="modal-overlay" id="createModal" style="display:none;" onclick="closeModalOverlay(event)">
+  <div class="modal">
+    <h2 style="display:flex;justify-content:space-between;align-items:center">Новая задача
+      <button id="voiceBtn" onclick="toggleVoice()" style="background:none;border:2px solid var(--accent);border-radius:50%;width:44px;height:44px;font-size:22px;cursor:pointer;color:var(--accent)">🎤</button>
+    </h2>
+    <div id="voiceStatus" style="display:none;background:var(--bg-tertiary);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:14px;color:var(--text-secondary)"></div>
+    <div class="form-group">
+      <label>Название</label>
+      <input type="text" id="newTitle" placeholder="Что нужно сделать? Напишите или нажмите 🎤" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>Проект</label>
+      <select id="newProject"></select>
+    </div>
+    <div class="form-group">
+      <label>Тип</label>
+      <select id="newType">
+        <option value="org">Организация</option>
+        <option value="dev">Разработка</option>
+        <option value="research">Исследование</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Дедлайн</label>
+      <input type="date" id="newDue" style="-webkit-appearance:none;appearance:none;background:var(--bg-tertiary);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:16px;width:100%">
+    </div>
+    <div class="form-group">
+      <label>Исполнитель</label>
+      <input type="text" id="newAssignee" placeholder="Имя (необязательно)">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeCreateModal()">Отмена</button>
+      <button class="btn btn-primary" onclick="createTask()">Создать</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Telegram WebApp init ────────────────────────
+const tg = window.Telegram.WebApp;
+tg.ready();
+try { tg.requestFullscreen(); } catch (e) { console.warn('requestFullscreen not supported:', e.message); }
+try { tg.expand(); } catch (e) { console.warn('expand failed:', e.message); }
+
+// Apply Telegram theme if available
+// Telegram theme is DISABLED — we force our dark theme always
+// (user prefers consistent dark theme regardless of Telegram's choice)
+
+// ── State ───────────────────────────────────────
+let currentTag = '';
+let currentProject = '';
+let currentView = 'tasks';
+let allTasks = [];
+let projects = {};
+let statusDropdownTarget = null;
+
+const API_BASE = '/api';
+
+function authHeaders() {
+  return {
+    'Authorization': 'tma ' + (tg.initData || ''),
+    'Content-Type': 'application/json',
+  };
+}
+
+async function apiGet(url) {
+  const resp = await fetch(API_BASE + url, { headers: authHeaders() });
+  if (!resp.ok) throw new Error(`API error: ${resp.status}`);
+  return resp.json();
+}
+
+async function apiPost(url, body) {
+  const resp = await fetch(API_BASE + url, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) throw new Error(`API error: ${resp.status}`);
+  return resp.json();
+}
+
+async function apiPatch(url, body) {
+  const resp = await fetch(API_BASE + url, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) throw new Error(`API error: ${resp.status}`);
+  return resp.json();
+}
+
+// ── Toast ───────────────────────────────────────
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast visible' + (isError ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 2000);
+}
+
+// ── Projects ────────────────────────────────────
+async function loadProjects() {
+  try {
+    projects = await apiGet('/projects');
+    renderProjects();
+    populateProjectSelect();
+  } catch (e) {
+    console.error('Load projects failed:', e);
+  }
+}
+
+function renderProjects() {
+  const list = document.getElementById('projectList');
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayCount = allTasks.filter(t => t.due === todayStr && !['done','cancelled'].includes(t.status)).length;
+  const overdueCount = allTasks.filter(t => t.due && t.due < todayStr && !['done','cancelled'].includes(t.status)).length;
+  const todayTotal = todayCount + overdueCount;
+
+  let html = `<div class="project-item ${currentProject === '__today__' ? 'active' : ''}" onclick="selectProject('__today__');currentTag='';" style="border-bottom:1px solid var(--border)">
+    <span class="project-name" style="font-size:19px;font-weight:700">Сегодня!</span>
+    <span class="project-count" style="${todayTotal > 0 ? 'background:var(--red);color:white' : ''}">${todayTotal}</span>
+  </div>`;
+
+  html += `<div class="project-item ${!currentProject ? 'active' : ''}" onclick="selectProject('');currentTag='';">
+    <span class="project-name">Все проекты</span>
+    <span class="project-count">${Object.values(projects).reduce((a, p) => a + p.count, 0)}</span>
+  </div>`;
+
+  for (const [slug, info] of Object.entries(projects)) {
+    const isActive = currentProject === slug;
+    const tags = getProjectTags(slug);
+    const hasSubsections = tags.length > 0;
+
+    html += `<div class="project-item ${isActive ? 'active' : ''}" onclick="selectProject('${slug}');currentTag='';">
+      <span class="project-name">${info.name}</span>
+      <span class="project-count">${info.count}</span>
+    </div>`;
+
+
+  }
+  list.innerHTML = html;
+}
+
+function getProjectTags(slug) {
+  const tags = new Set();
+  allTasks.forEach(t => {
+    if (t.project === slug && t.tags && t.tags.length > 0 && !['done','cancelled'].includes(t.status)) {
+      t.tags.forEach(tag => tags.add(tag));
+    }
+  });
+  return Array.from(tags).sort();
+}
+
+
+function renderTagPanel() {
+  const panel = document.getElementById('tagPanel');
+  const header = document.getElementById('tagPanelHeader');
+  const list = document.getElementById('tagList');
+
+  if (!currentProject || currentProject === '__today__') {
+    panel.style.display = 'none';
+    return;
+  }
+
+  const tags = getProjectTags(currentProject);
+  if (tags.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  const projName = projects[currentProject] ? projects[currentProject].name : currentProject;
+  
+  panel.style.display = 'flex';
+
+  // "All" item
+  const allCount = allTasks.filter(t => t.project === currentProject && !['done','cancelled'].includes(t.status)).length;
+  let h = `<div class="tag-item ${!currentTag ? 'active' : ''}" onclick="currentTag='';renderAfterFilter();renderTagPanel();">
+    <span class="tag-name">Все</span>
+    <span class="tag-count">${allCount}</span>
+  </div>`;
+
+  for (const tag of tags) {
+    const count = allTasks.filter(t => t.project === currentProject && (t.tags || []).includes(tag) && !['done','cancelled'].includes(t.status)).length;
+    h += `<div class="tag-item ${currentTag === tag ? 'active' : ''}" onclick="currentTag='${tag}';renderAfterFilter();renderTagPanel();">
+      <span class="tag-name">${tag}</span>
+      <span class="tag-count">${count}</span>
+    </div>`;
+  }
+
+  // "No tag" item
+  const noTagCount = allTasks.filter(t => t.project === currentProject && (!t.tags || t.tags.length === 0) && !['done','cancelled'].includes(t.status)).length;
+  if (noTagCount > 0) {
+    h += `<div class="tag-item ${currentTag === '__none__' ? 'active' : ''}" onclick="currentTag='__none__';renderAfterFilter();renderTagPanel();">
+      <span class="tag-name">Общее</span>
+      <span class="tag-count">${noTagCount}</span>
+    </div>`;
+  }
+
+  list.innerHTML = h;
+}
+
+function renderAfterFilter() {
+  renderProjects();
+  if (currentView === 'tasks') renderTable();
+  else if (currentView === 'today') renderToday();
+}
+
+function populateProjectSelect() {
+  const sel = document.getElementById('newProject');
+  sel.innerHTML = '';
+  for (const [slug, info] of Object.entries(projects)) {
+    if (slug === 'recurring') continue;
+    const opt = document.createElement('option');
+    opt.value = slug;
+    opt.textContent = info.name;
+    if (slug === (currentProject || 'life')) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+async function selectProject(slug) {
+  currentTag = '';
+  currentProject = slug || '';
+
+  // Always close tag panel first
+  document.getElementById('tagPanel').style.display = 'none';
+
+  if (slug === '__today__') {
+    document.getElementById('topBarTitle').textContent = 'Сегодня!';
+    renderProjects();
+    renderTodayTable();
+    return;
+  }
+
+  if (!slug) {
+    document.getElementById('topBarTitle').textContent = 'Все задачи';
+    renderProjects();
+    loadTasks();
+    return;
+  }
+
+  document.getElementById('topBarTitle').textContent = projects[slug]?.name || slug;
+  renderProjects();
+
+  // Load tasks first, then show tag panel with correct counts
+  await loadTasks();
+
+  const tags = getProjectTags(slug);
+  if (tags.length > 0) {
+    renderTagPanel();
+  }
+  closeSidebar();
+}
+
+// ── Tasks ───────────────────────────────────────
+let _allTasksCache = null;
+let _cacheTime = 0;
+
+async function fetchAllTasks(force) {
+  if (!force && _allTasksCache && (Date.now() - _cacheTime < 30000)) {
+    return _allTasksCache;
+  }
+  _allTasksCache = await apiGet('/tasks');
+  _cacheTime = Date.now();
+  return _allTasksCache;
+}
+
+async function loadTasks() {
+  const area = document.getElementById('contentArea');
+  if (!_allTasksCache) {
+    area.innerHTML = '<div class="loading"><div class="spinner"></div>Загрузка...</div>';
+  }
+  try {
+    const all = await fetchAllTasks(false);
+    const statusFilter = document.getElementById('filterStatus').value;
+
+    allTasks = all.filter(t => {
+      // Project filter
+      if (currentProject && currentProject !== '__today__' && t.project !== currentProject) return false;
+      // Status filter
+      if (statusFilter && t.status !== statusFilter) return false;
+      if (!statusFilter && (t.status === 'done' || t.status === 'cancelled')) return false;
+      return true;
+    });
+
+    renderProjects();
+    if (currentView === 'tasks') renderTable();
+    else if (currentView === 'today') renderToday();
+  } catch (e) {
+    area.innerHTML = `<div class="empty-state"><div class="empty-state-icon">!</div><div class="empty-state-text">Ошибка загрузки: ${e.message}</div></div>`;
+  }
+}
+
+function renderTable() {
+  const area = document.getElementById('contentArea');
+  if (!allTasks.length) {
+    area.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#9745;</div><div class="empty-state-text">Нет задач</div></div>';
+    return;
+  }
+
+  // Filter by tag
+  let tasksToShow = allTasks;
+  if (currentTag && currentTag === '__none__') {
+    tasksToShow = allTasks.filter(t => !t.tags || t.tags.length === 0);
+  } else if (currentTag) {
+    tasksToShow = allTasks.filter(t => t.tags && t.tags.includes(currentTag));
+  }
+
+  // Sort: in_progress first, then todo, then by due date, then by id
+  const statusOrder = { in_progress: 0, todo: 1, done: 2, cancelled: 3 };
+  const sorted = [...tasksToShow].sort((a, b) => {
+    const sa = statusOrder[a.status] ?? 1;
+    const sb = statusOrder[b.status] ?? 1;
+    if (sa !== sb) return sa - sb;
+    if (a.due && b.due) return a.due.localeCompare(b.due);
+    if (a.due) return -1;
+    if (b.due) return 1;
+    return (b.task_id || 0) - (a.task_id || 0);
+  });
+
+  let html = `<table class="task-table">
+    <thead><tr>
+      <th style="width:60px">ID</th>
+      <th>Название</th>
+      <th style="width:110px">Статус</th>
+      <th style="width:130px">Дедлайн</th>
+      <th style="width:120px">Проект</th>
+      <th style="width:120px">Исполнитель</th>
+    </tr></thead><tbody>`;
+
+  for (const t of sorted) {
+    const dueClass = getDueClass(t.due);
+    const dueDisplay = t.due ? formatDueShort(t.due) : '';
+    html += `<tr class="task-row-wrapper" id="row-${t.project}-${t.task_id}"
+      ontouchstart="swipeStart(event)" ontouchmove="swipeMove(event, '${t.project}', ${t.task_id})" ontouchend="swipeEnd(event, '${t.project}', ${t.task_id})">
+      <td class="task-id" onclick="openEditModal('${t.project}', ${t.task_id})" style="cursor:pointer">#${t.task_id || ''}</td>
+      <td class="task-title" onclick="openEditModal('${t.project}', ${t.task_id})" style="cursor:pointer">${escHtml(t.title || '')}</td>
+      <td><button class="status-badge status-${t.status}" onclick="event.stopPropagation();openStatusDropdown(event, '${t.project}', ${t.task_id})">${statusLabel(t.status)}</button></td>
+      <td class="due-cell ${dueClass}">
+        <input type="date" class="due-date-input ${dueClass}" value="${t.due || ''}"
+          onclick="event.stopPropagation()" onchange="updateDue('${t.project}', ${t.task_id}, this.value)">
+      </td>
+      <td><span class="project-badge">${projects[t.project]?.name || t.project}</span></td>
+      <td class="assignee-cell">${escHtml(t.assignee || '')}</td>
+    </tr>`;
+  }
+
+  html += '</tbody></table>';
+  area.innerHTML = html;
+}
+
+function statusLabel(s) {
+  const labels = { todo: 'Todo', in_progress: 'В работе', done: 'Выполнено', cancelled: 'Отменено' };
+  return labels[s] || s;
+}
+
+function getDueClass(due) {
+  if (!due) return '';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(due + 'T00:00:00');
+  const diff = (d - today) / 86400000;
+  if (diff < 0) return 'due-overdue';
+  if (diff === 0) return 'due-today';
+  if (diff <= 3) return 'due-soon';
+  return 'due-future';
+}
+
+function formatDueShort(due) {
+  const months = ['', 'янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+  const [y, m, d] = due.split('-').map(Number);
+  return `${d} ${months[m]}`;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ── Status dropdown ─────────────────────────────
+function openStatusDropdown(event, project, taskId) {
+  event.stopPropagation();
+  statusDropdownTarget = { project, taskId };
+  const dd = document.getElementById('statusDropdown');
+  const rect = event.target.getBoundingClientRect();
+  dd.style.display = 'block';
+  dd.style.top = (rect.bottom + 4) + 'px';
+  dd.style.left = rect.left + 'px';
+}
+
+async function setStatus(newStatus) {
+  const dd = document.getElementById('statusDropdown');
+  dd.style.display = 'none';
+  if (!statusDropdownTarget) return;
+  const { project, taskId } = statusDropdownTarget;
+  try {
+    await apiPatch(`/task/${project}/${taskId}`, { status: newStatus });
+    showToast(`#${taskId} -> ${statusLabel(newStatus)}`);
+    loadTasks();
+    loadProjects();
+  } catch (e) {
+    showToast('Ошибка: ' + e.message, true);
+  }
+}
+
+async function updateDue(project, taskId, newDue) {
+  try {
+    await apiPatch(`/task/${project}/${taskId}`, { due: newDue || '' });
+    showToast(`#${taskId}: дедлайн обновлен`);
+    loadTasks();
+  } catch (e) {
+    showToast('Ошибка: ' + e.message, true);
+  }
+}
+
+// Close dropdown on outside click
+document.addEventListener('click', () => {
+  document.getElementById('statusDropdown').style.display = 'none';
+});
+
+// ── Week view ───────────────────────────────────
+function renderWeek() {
+  const area = document.getElementById('contentArea');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayOfWeek = (today.getDay() + 6) % 7; // Monday = 0
+  const monday = new Date(today);
+  monday.setDate(monday.getDate() - dayOfWeek);
+
+  const dayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+  const months = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+
+  let html = '<div class="week-view">';
+
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(monday);
+    day.setDate(day.getDate() + i);
+    const dateStr = day.toISOString().split('T')[0];
+    const isToday = dateStr === today.toISOString().split('T')[0];
+
+    const dayTasks = allTasks.filter(t => t.due === dateStr);
+
+    html += `<div class="week-day">
+      <div class="week-day-header ${isToday ? 'today' : ''}">
+        ${dayNames[i]}, ${day.getDate()} ${months[day.getMonth()]}
+      </div>
+      <div class="week-day-tasks">`;
+
+    for (const t of dayTasks) {
+      const statusClass = t.status === 'done' ? 'status-done-card' : t.status === 'in_progress' ? 'status-in_progress-card' : '';
+      html += `<div class="week-task ${statusClass}">
+        <div class="week-task-id">#${t.task_id} ${projects[t.project]?.name || t.project}</div>
+        <div class="week-task-title">${escHtml(t.title || '')}</div>
+      </div>`;
+    }
+
+    if (!dayTasks.length) {
+      html += '<div style="color:var(--text-secondary);font-size:12px;text-align:center;padding:20px 0;opacity:0.4;">—</div>';
+    }
+
+    html += '</div></div>';
+  }
+
+  html += '</div>';
+  area.innerHTML = html;
+}
+
+// ── Views ───────────────────────────────────────
+function renderToday() {
+  const today = new Date().toISOString().split("T")[0];
+  const todayTasks = allTasks.filter(t => t.due === today && t.status !== "done" && t.status !== "cancelled");
+  const urgentTasks = allTasks.filter(t => {
+    if (!t.due || t.status === "done" || t.status === "cancelled") return false;
+    return t.due < today;
+  });
+  const inProgressTasks = allTasks.filter(t => t.status === "in_progress" && t.due !== today);
+  const area = document.getElementById("contentArea");
+  const formatDate = d => { if(!d) return ""; const p=d.split("-"); const months=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"]; return p[2]+" "+months[parseInt(p[1])-1]; };
+  const days = ["воскресенье","понедельник","вторник","среда","четверг","пятница","суббота"];
+  const d = new Date(); const dayName = days[d.getDay()];
+  const monthsFull = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+  const dateStr = d.getDate() + " " + monthsFull[d.getMonth()] + ", " + dayName;
+  let html = "<div style=\"padding:20px\">";
+  html += "<h1 style=\"font-size:28px;margin-bottom:6px\">Сегодня!</h1>";
+  html += "<p style=\"color:var(--text-secondary);font-size:16px;margin-bottom:24px\">" + dateStr + "</p>";
+  if (urgentTasks.length > 0) {
+    html += "<h2 style=\"font-size:18px;color:var(--red);margin-bottom:12px\">Просрочено (" + urgentTasks.length + ")</h2>";
+    urgentTasks.forEach(t => { html += todayCard(t, formatDate); });
+    html += "<div style=\"margin-bottom:24px\"></div>";
+  }
+  if (todayTasks.length > 0) {
+    html += "<h2 style=\"font-size:18px;margin-bottom:12px\">На сегодня (" + todayTasks.length + ")</h2>";
+    todayTasks.forEach(t => { html += todayCard(t, formatDate); });
+    html += "<div style=\"margin-bottom:24px\"></div>";
+  }
+  if (inProgressTasks.length > 0) {
+    html += "<h2 style=\"font-size:18px;color:var(--orange);margin-bottom:12px\">В работе (" + inProgressTasks.length + ")</h2>";
+    inProgressTasks.forEach(t => { html += todayCard(t, formatDate); });
+  }
+  if (todayTasks.length === 0 && urgentTasks.length === 0 && inProgressTasks.length === 0) {
+    html += "<p style=\"color:var(--text-secondary);font-size:18px;margin-top:40px;text-align:center\">Нет задач на сегодня</p>";
+  }
+  html += "</div>";
+  area.innerHTML = html;
+}
+function todayCard(t, formatDate) {
+  const statusColors = {todo:"var(--accent)",in_progress:"var(--orange)",backlog:"var(--text-secondary)"};
+  const borderColor = statusColors[t.status] || "var(--border)";
+  return "<div style=\"background:var(--bg-secondary);border-left:4px solid "+borderColor+";border-radius:8px;padding:14px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center\">" +
+    "<div><span style=\"color:var(--text-secondary);font-size:13px\">#"+t.task_id+" · "+t.project+"</span>" +
+    "<div style=\"font-size:16px;font-weight:500;margin-top:4px\">"+t.title+"</div></div>" +
+    "<div style=\"text-align:right;font-size:13px;color:var(--text-secondary)\">"+formatDate(t.due)+"</div></div>";
+}
+function renderTodayTable() {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const overdue = allTasks.filter(t => t.due && t.due < todayStr && !['done','cancelled'].includes(t.status));
+  const todayTasks = allTasks.filter(t => t.due === todayStr && !['done','cancelled'].includes(t.status));
+  const inProgress = allTasks.filter(t => t.status === 'in_progress' && t.due !== todayStr && !(t.due && t.due < todayStr));
+
+  const area = document.getElementById('contentArea');
+  const days = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+  const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  const d = new Date();
+  const dateStr = d.getDate() + ' ' + months[d.getMonth()] + ', ' + days[d.getDay()];
+
+  let out = '<div style="padding:8px 0">';
+  out += '<p style="color:var(--text-secondary);font-size:15px;margin-bottom:16px;padding:0 4px">' + dateStr + '</p>';
+
+  if (overdue.length > 0) {
+    out += '<h3 style="color:var(--red);font-size:16px;padding:0 4px;margin-bottom:8px">\u26a0 Просрочено (' + overdue.length + ')</h3>';
+    out += buildTodayRows(overdue);
+  }
+  if (todayTasks.length > 0) {
+    out += '<h3 style="font-size:16px;padding:0 4px;margin:16px 0 8px">\ud83d\udcc5 На сегодня (' + todayTasks.length + ')</h3>';
+    out += buildTodayRows(todayTasks);
+  }
+  if (inProgress.length > 0) {
+    out += '<h3 style="color:var(--orange);font-size:16px;padding:0 4px;margin:16px 0 8px">\u23f3 В работе (' + inProgress.length + ')</h3>';
+    out += buildTodayRows(inProgress);
+  }
+  if (overdue.length === 0 && todayTasks.length === 0 && inProgress.length === 0) {
+    out += '<p style="color:var(--text-secondary);font-size:18px;text-align:center;margin-top:60px">\u2705 Нет задач на сегодня</p>';
+  }
+  out += '</div>';
+  area.innerHTML = out;
+}
+
+function buildTodayRows(tasks) {
+  let h = '<table class="task-table" style="margin-bottom:8px"><tbody>';
+  for (const t of tasks) {
+    const dd = t.due ? formatDueShort(t.due) : '';
+    const dc = getDueClass(t.due);
+    const pn = projects[t.project] ? projects[t.project].name : t.project;
+    h += `<tr onclick="openEditModal('${t.project}', ${t.task_id})" style="cursor:pointer">
+      <td class="task-id">#${t.task_id || ''}</td>
+      <td class="task-title">${escHtml(t.title || '')}</td>
+      <td><button class="status-badge status-${t.status}" onclick="event.stopPropagation();openStatusDropdown(event, '${t.project}', ${t.task_id})">${statusLabel(t.status)}</button></td>
+      <td class="due-cell ${dc}">${dd}</td>
+      <td><span class="project-badge">${pn}</span></td>
+    </tr>`;
+  }
+  h += '</tbody></table>';
+  return h;
+}
+
+function switchView(view) {
+  if (view === 'create') {
+    showCreateModal();
+    return;
+  }
+  currentView = view;
+  document.querySelectorAll('.nav-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.view === view);
+  });
+  if (view === 'tasks') renderTable();
+  else if (view === 'today') renderToday();
+}
+
+// ── Create modal ────────────────────────────────
+function showCreateModal() {
+  document.getElementById('createModal').style.display = 'flex';
+  document.getElementById('newTitle').value = '';
+  document.getElementById('newDue').value = '';
+  document.getElementById('newAssignee').value = '';
+  populateProjectSelect();
+  setTimeout(() => document.getElementById('newTitle').focus(), 100);
+}
+
+function closeCreateModal() {
+  document.getElementById('createModal').style.display = 'none';
+}
+
+function closeModalOverlay(e) {
+  if (e.target === e.currentTarget) closeCreateModal();
+}
+
+async function createTask() {
+  const title = document.getElementById('newTitle').value.trim();
+  if (!title) {
+    showToast('Введите название задачи', true);
+    return;
+  }
+  const body = {
+    project: document.getElementById('newProject').value,
+    title: title,
+    type: document.getElementById('newType').value,
+    due: document.getElementById('newDue').value || '',
+    assignee: document.getElementById('newAssignee').value.trim() || '',
+  };
+  try {
+    const task = await apiPost('/task', body);
+    showToast(`Задача #${task.task_id} создана`);
+    closeCreateModal();
+    _allTasksCache = null;
+    loadTasks();
+    loadProjects();
+  } catch (e) {
+    showToast('Ошибка: ' + e.message, true);
+  }
+}
+
+// ── Mobile sidebar ──────────────────────────────
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').style.display =
+    document.getElementById('sidebar').classList.contains('open') ? 'block' : 'none';
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').style.display = 'none';
+}
+
+// ── Init ────────────────────────────────────────
+async function init() {
+  await loadProjects();
+  await loadTasks();
+}
+
+init();
+
+// ── Voice recording ──────────────────────────
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+
+async function toggleVoice() {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+}
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+    audioChunks = [];
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(audioChunks, { type: 'audio/ogg' });
+      await transcribeAudio(blob);
+    };
+    mediaRecorder.start();
+    isRecording = true;
+    const btn = document.getElementById('voiceBtn');
+    btn.style.background = 'var(--red)';
+    btn.style.color = 'white';
+    btn.style.borderColor = 'var(--red)';
+    btn.textContent = '⏹';
+    document.getElementById('voiceStatus').style.display = 'block';
+    document.getElementById('voiceStatus').textContent = '🔴 Запись... Нажмите ⏹ для остановки';
+  } catch (e) {
+    alert('Нет доступа к микрофону');
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+  isRecording = false;
+  const btn = document.getElementById('voiceBtn');
+  btn.style.background = 'none';
+  btn.style.color = 'var(--accent)';
+  btn.style.borderColor = 'var(--accent)';
+  btn.textContent = '🎤';
+  document.getElementById('voiceStatus').textContent = '⏳ Транскрибирую...';
+}
+
+async function transcribeAudio(blob) {
+  try {
+    const resp = await fetch('/api/transcribe', {
+      method: 'POST',
+      headers: { 'Authorization': 'tma ' + tg.initData },
+      body: blob,
+    });
+    const data = await resp.json();
+    if (data.text) {
+      const title = document.getElementById('newTitle');
+      if (!title.value) {
+        title.value = data.text;
+      } else {
+        title.value += ' ' + data.text;
+      }
+      document.getElementById('voiceStatus').textContent = '✅ ' + data.text;
+      setTimeout(() => { document.getElementById('voiceStatus').style.display = 'none'; }, 3000);
+    }
+  } catch (e) {
+    document.getElementById('voiceStatus').textContent = '❌ Ошибка транскрибации';
+    setTimeout(() => { document.getElementById('voiceStatus').style.display = 'none'; }, 3000);
+  }
+}
+
+// ── Edit modal ──────────────────────────
+let editRecorder = null;
+let editChunks = [];
+let editRecording = false;
+
+async function openEditModal(project, taskId) {
+  document.getElementById('editModal').style.display = 'flex';
+  document.getElementById('editVoiceStatus').style.display = 'none';
+  document.getElementById('editModalId').textContent = '#' + taskId;
+  document.getElementById('editTitle').value = 'Загрузка...';
+  document.getElementById('editBody').value = '';
+  document.getElementById('editProject').value = project;
+  document.getElementById('editTaskId').value = taskId;
+  try {
+    const resp = await fetch('/api/task/' + project + '/' + taskId, {
+      headers: { 'Authorization': 'tma ' + tg.initData }
+    });
+    const task = await resp.json();
+    document.getElementById('editTitle').value = task.title || '';
+    document.getElementById('editStatus').value = task.status || 'todo';
+    document.getElementById('editDue').value = task.due || '';
+    document.getElementById('editAssignee').value = task.assignee || '';
+    editTagsList = [...(task.tags || [])];
+    renderEditTags();
+    document.getElementById('editBody').value = task.body || '';
+  } catch (e) {
+    document.getElementById('editTitle').value = 'Ошибка загрузки';
+  }
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').style.display = 'none';
+}
+
+async function saveTask() {
+  const project = document.getElementById('editProject').value;
+  const taskId = document.getElementById('editTaskId').value;
+  const tags = [...editTagsList];
+  const updates = {
+    title: document.getElementById('editTitle').value.trim(),
+    status: document.getElementById('editStatus').value,
+    due: document.getElementById('editDue').value || '',
+    assignee: document.getElementById('editAssignee').value.trim() || '',
+    body: document.getElementById('editBody').value,
+    tags: tags,
+  };
+  try {
+    await apiPatch('/task/' + project + '/' + taskId, updates);
+    closeEditModal();
+    _allTasksCache = null;
+    loadTasks();
+    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  }
+}
+async function cancelTask(project, taskId, rowEl) {
+  try {
+    const resp = await fetch('/api/task/' + project + '/' + taskId, {
+      method: 'PATCH',
+      headers: { 'Authorization': 'tma ' + tg.initData, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'cancelled' }),
+    });
+    if (resp.ok) {
+      rowEl.style.transition = 'opacity 0.3s, height 0.3s';
+      rowEl.style.opacity = '0';
+      rowEl.style.height = '0';
+      rowEl.style.overflow = 'hidden';
+      setTimeout(() => { _allTasksCache = null; loadTasks(); }, 400);
+      if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
+    }
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  }
+}
+
+
+async function toggleEditVoice() {
+  if (editRecording) {
+    if (editRecorder && editRecorder.state !== 'inactive') editRecorder.stop();
+    editRecording = false;
+    const btn = document.getElementById('editVoiceBtn');
+    btn.style.background = 'none';
+    btn.style.color = 'var(--accent)';
+    btn.style.borderColor = 'var(--accent)';
+    btn.innerHTML = '&#127908;';
+    document.getElementById('editVoiceStatus').textContent = '\u23f3 Транскрибирую...';
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    editRecorder = new MediaRecorder(stream);
+    editChunks = [];
+    editRecorder.ondataavailable = e => editChunks.push(e.data);
+    editRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(editChunks, { type: 'audio/ogg' });
+      try {
+        const resp = await fetch('/api/transcribe', {
+          method: 'POST',
+          headers: { 'Authorization': 'tma ' + tg.initData },
+          body: blob,
+        });
+        const data = await resp.json();
+        if (data.text) {
+          const bodyEl = document.getElementById('editBody');
+          if (bodyEl.value) bodyEl.value += '\n' + data.text;
+          else bodyEl.value = data.text;
+          document.getElementById('editVoiceStatus').textContent = '\u2705 ' + data.text;
+          setTimeout(() => { document.getElementById('editVoiceStatus').style.display = 'none'; }, 3000);
+        }
+      } catch (e) {
+        document.getElementById('editVoiceStatus').textContent = '\u274c Ошибка';
+        setTimeout(() => { document.getElementById('editVoiceStatus').style.display = 'none'; }, 3000);
+      }
+    };
+    editRecorder.start();
+    editRecording = true;
+    const btn = document.getElementById('editVoiceBtn');
+    btn.style.background = 'var(--red)';
+    btn.style.color = 'white';
+    btn.style.borderColor = 'var(--red)';
+    btn.innerHTML = '\u23f9';
+    document.getElementById('editVoiceStatus').style.display = 'block';
+    document.getElementById('editVoiceStatus').textContent = '\ud83d\udd34 Запись... Нажмите для остановки';
+  } catch (e) {
+    alert('Нет доступа к микрофону');
+  }
+}
+
+// Prevent row click when clicking status badge or date input
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('status-badge') || e.target.classList.contains('due-date-input')) {
+    e.stopPropagation();
+  }
+}, true);
+
+
+// ── Swipe to delete ──────────────────────
+let swipeStartX = 0;
+let swipeCurrentRow = null;
+
+function swipeStart(e) {
+  swipeStartX = e.touches[0].clientX;
+}
+
+function swipeMove(e, project, taskId) {
+  const dx = swipeStartX - e.touches[0].clientX;
+  const row = document.getElementById('row-' + project + '-' + taskId);
+  row.classList.remove('swiped-left', 'swiped-right');
+  if (dx > 60) {
+    row.classList.add('swiped-left');
+    swipeCurrentRow = { el: row, project, taskId, dir: 'left' };
+  } else if (dx < -60) {
+    row.classList.add('swiped-right');
+    swipeCurrentRow = { el: row, project, taskId, dir: 'right' };
+  } else {
+    swipeCurrentRow = null;
+  }
+}
+
+function swipeEnd(e, project, taskId) {
+  const row = document.getElementById('row-' + project + '-' + taskId);
+  if (!swipeCurrentRow) return;
+  if (swipeCurrentRow.dir === 'left') {
+    setTimeout(() => {
+      if (confirm('Архивировать задачу #' + taskId + '?')) {
+        archiveTask(project, taskId, row);
+      } else {
+        row.classList.remove('swiped-left');
+      }
+    }, 100);
+  } else if (swipeCurrentRow.dir === 'right') {
+    setTimeout(() => {
+      if (confirm('Отменить задачу #' + taskId + '?')) {
+        cancelTask(project, taskId, row);
+      } else {
+        row.classList.remove('swiped-right');
+      }
+    }, 100);
+  }
+}
+
+async function archiveTask(project, taskId, rowEl) {
+  try {
+    const resp = await fetch('/api/task/' + project + '/' + taskId, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'tma ' + tg.initData },
+    });
+    if (resp.ok) {
+      rowEl.style.transition = 'opacity 0.3s, height 0.3s';
+      rowEl.style.opacity = '0';
+      rowEl.style.height = '0';
+      rowEl.style.overflow = 'hidden';
+      setTimeout(() => { _allTasksCache = null; loadTasks(); }, 400);
+      if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    }
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  }
+}
+
+
+// ── Tag picker ──────────────────────────
+let editTagsList = [];
+
+function renderEditTags() {
+  const container = document.getElementById('editTagsContainer');
+  // Get all existing tags for suggestions
+  const allExistingTags = new Set();
+  allTasks.forEach(t => (t.tags || []).forEach(tag => allExistingTags.add(tag)));
+
+  let h = '';
+  // Show current tags as removable chips
+  for (const tag of editTagsList) {
+    h += '<span style="background:var(--accent);color:white;border-radius:12px;padding:6px 12px;font-size:14px;display:inline-flex;align-items:center;gap:6px">'
+      + tag + ' <span onclick="removeEditTag(\'' + tag + '\')" style="cursor:pointer;font-size:16px;opacity:0.7">\u00d7</span></span>';
+  }
+  container.innerHTML = h;
+  document.getElementById('editTags').value = editTagsList.join(', ');
+
+  // Show suggestions (existing tags not yet added)
+  const suggestions = Array.from(allExistingTags).filter(t => !editTagsList.includes(t)).sort();
+  if (suggestions.length > 0) {
+    let sh = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">';
+    for (const s of suggestions) {
+      sh += '<span onclick="addExistingTag(\'' + s + '\')" style="background:var(--bg-tertiary);color:var(--text-secondary);border-radius:12px;padding:4px 10px;font-size:13px;cursor:pointer;border:1px solid var(--border)">' + s + '</span>';
+    }
+    sh += '</div>';
+    container.innerHTML += sh;
+  }
+}
+
+function addEditTag() {
+  const input = document.getElementById('editTagInput');
+  const tag = input.value.trim();
+  if (tag && !editTagsList.includes(tag)) {
+    editTagsList.push(tag);
+    renderEditTags();
+  }
+  input.value = '';
+}
+
+function addExistingTag(tag) {
+  if (!editTagsList.includes(tag)) {
+    editTagsList.push(tag);
+    renderEditTags();
+  }
+}
+
+function removeEditTag(tag) {
+  editTagsList = editTagsList.filter(t => t !== tag);
+  renderEditTags();
+}
+
+
+// ── Sync buttons ──────────────────────────
+async function syncPush() {
+  try {
+    const resp = await fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Authorization': 'tma ' + tg.initData, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'push' }),
+    });
+    const data = await resp.json();
+    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    tg.showAlert(data.message || 'Push OK');
+  } catch (e) {
+    tg.showAlert('Ошибка: ' + e.message);
+  }
+}
+
+async function syncPull() {
+  try {
+    const resp = await fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Authorization': 'tma ' + tg.initData, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'pull' }),
+    });
+    const data = await resp.json();
+    _allTasksCache = null;
+    loadTasks();
+    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    tg.showAlert(data.message || 'Pull OK');
+  } catch (e) {
+    tg.showAlert('Ошибка: ' + e.message);
+  }
+}
+
+// ── Quick voice create ──────────────────────
+async function quickVoiceCreate() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const recorder = new MediaRecorder(stream);
+    const chunks = [];
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      tg.showAlert('\u23f3 Транскрибирую...');
+      const blob = new Blob(chunks, { type: 'audio/ogg' });
+      try {
+        const resp = await fetch('/api/transcribe', {
+          method: 'POST',
+          headers: { 'Authorization': 'tma ' + tg.initData },
+          body: blob,
+        });
+        const data = await resp.json();
+        if (data.text) {
+          showCreateModal();
+          document.getElementById('newTitle').value = data.text;
+        }
+      } catch (e) {
+        tg.showAlert('Ошибка транскрибации');
+      }
+    };
+    recorder.start();
+    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+    tg.showAlert('\ud83d\udd34 Говорите... Нажмите OK чтобы остановить');
+    // Stop after alert is dismissed
+    setTimeout(() => {
+      if (recorder.state !== 'inactive') recorder.stop();
+    }, 200);
+  } catch (e) {
+    tg.showAlert('Нет доступа к микрофону');
+  }
+}
+
+
+// ── Slider button ──────────────────────────
+const SLIDER_SLOTS = [
+  { label: 'ПУЛ', color: '#1976D2', action: 'pull' },
+  { label: 'ПУШ', color: '#1976D2', action: 'push' },
+  { label: 'Создать', color: '#4CAF50', action: 'create' },
+  { label: 'ЗАПИСЬ!', color: '#e53935', action: 'record' },
+];
+let sliderIndex = 3; // default: ЗАПИСЬ!
+let sliderStartX = 0;
+let sliderStartLeft = 0;
+let sliderDragging = false;
+
+function sliderTouchStart(e) {
+  sliderDragging = false;
+  sliderStartX = e.touches[0].clientX;
+  const btn = document.getElementById('sliderBtn');
+  sliderStartLeft = btn.offsetLeft;
+  btn.style.transition = 'none';
+}
+
+function sliderTouchMove(e) {
+  const rawDx = e.touches[0].clientX - sliderStartX;
+  if (Math.abs(rawDx) < 5) return;
+  e.preventDefault();
+  sliderDragging = true;
+  const dx = rawDx;
+  const bar = document.getElementById('sliderBar');
+  const btn = document.getElementById('sliderBtn');
+  const barW = bar.offsetWidth;
+  const slotW = barW / 4;
+  let newLeft = sliderStartLeft + dx;
+  newLeft = Math.max(0, Math.min(newLeft, barW - slotW));
+  btn.style.left = newLeft + 'px';
+
+  // Snap preview: update text/color based on nearest slot
+  const nearestIdx = Math.round(newLeft / slotW);
+  const clamped = Math.max(0, Math.min(nearestIdx, 3));
+  btn.textContent = SLIDER_SLOTS[clamped].label;
+  btn.style.background = SLIDER_SLOTS[clamped].color;
+}
+
+function sliderTouchEnd(e) {
+  const btn = document.getElementById('sliderBtn');
+  const bar = document.getElementById('sliderBar');
+  const slotW = bar.offsetWidth / 4;
+
+  if (sliderDragging) {
+    const currentLeft = btn.offsetLeft;
+    const nearestIdx = Math.round(currentLeft / slotW);
+    sliderIndex = Math.max(0, Math.min(nearestIdx, 3));
+    btn.style.transition = 'left 0.2s ease, background 0.2s ease';
+    btn.style.left = (sliderIndex * 25) + '%';
+    btn.textContent = SLIDER_SLOTS[sliderIndex].label;
+    btn.style.background = SLIDER_SLOTS[sliderIndex].color;
+    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+    sliderDragging = false;
+  } else {
+    // No drag = tap = execute action
+    sliderAction();
+  }
+}
+
+
+function sliderMoveTo(idx) {
+  sliderIndex = Math.max(0, Math.min(idx, 3));
+  const btn = document.getElementById('sliderBtn');
+  btn.style.transition = 'left 0.25s ease, background 0.25s ease';
+  btn.style.left = (sliderIndex * 25) + '%';
+  btn.textContent = SLIDER_SLOTS[sliderIndex].label;
+  btn.style.background = SLIDER_SLOTS[sliderIndex].color;
+  if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+}
+
+async function sliderAction() {
+  const slot = SLIDER_SLOTS[sliderIndex];
+  const btn = document.getElementById('sliderBtn');
+  const origLabel = slot.label;
+
+  if (slot.action === 'pull') {
+    await syncPull();
+    btn.textContent = 'Готово!';
+  } else if (slot.action === 'push') {
+    await syncPush();
+    btn.textContent = 'Готово!';
+  } else if (slot.action === 'create') {
+    showCreateModal();
+    return;
+  } else if (slot.action === 'record') {
+    quickVoiceCreate();
+    return;
+  }
+
+  setTimeout(() => { btn.textContent = origLabel; }, 1200);
+}
+
+</script>
+
+<!-- Edit modal -->
+<div class="modal-overlay" id="editModal" style="display:none;" onclick="closeModalOverlay(event)">
+  <div class="modal" style="max-width:700px;max-height:85vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span style="font-size:16px;color:var(--text-secondary)" id="editModalId">#000</span>
+      <button id="editVoiceBtn" onclick="toggleEditVoice()" style="background:none;border:2px solid var(--accent);border-radius:50%;width:44px;height:44px;font-size:22px;cursor:pointer;color:var(--accent)">&#127908;</button>
+    </div>
+    <div id="editVoiceStatus" style="display:none;background:var(--bg-tertiary);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:14px;color:var(--text-secondary)"></div>
+    <div class="form-group">
+      <label>Название</label>
+      <input type="text" id="editTitle" style="font-size:18px;font-weight:600;padding:12px" autocomplete="off">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label>Статус</label>
+        <select id="editStatus">
+          <option value="todo">Todo</option>
+          <option value="in_progress">В работе</option>
+          <option value="done">Выполнено</option>
+          <option value="cancelled">Отменено</option>
+          <option value="backlog">Backlog</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Дедлайн</label>
+        <input type="date" id="editDue" style="-webkit-appearance:none;background:var(--bg-tertiary);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:15px;width:100%">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Исполнитель</label>
+      <input type="text" id="editAssignee" placeholder="Имя">
+    </div>
+    <div class="form-group">
+      <label>Теги (подразделы)</label>
+      <div id="editTagsContainer" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="editTagInput" placeholder="Новый тег..." style="font-size:15px;flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addEditTag();}">
+        <button class="btn btn-secondary" onclick="addEditTag()" style="padding:8px 16px;white-space:nowrap">+</button>
+      </div>
+      <input type="hidden" id="editTags">
+    </div>
+    <div class="form-group">
+      <label>Содержание</label>
+      <textarea id="editBody" rows="12" style="width:100%;background:var(--bg-tertiary);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:14px;font-family:monospace;resize:vertical;line-height:1.6" placeholder="Markdown содержимое задачи..."></textarea>
+    </div>
+    <input type="hidden" id="editProject">
+    <input type="hidden" id="editTaskId">
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeEditModal()">Отмена</button>
+      <button class="btn btn-primary" onclick="saveTask()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
