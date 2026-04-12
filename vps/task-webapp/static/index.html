@@ -717,6 +717,58 @@
     background: #1c1c1e !important;
     min-height: 100vh;
   }
+
+  /* ── Modal slider (3-position: Отмена/Создать/Запись!) ─────── */
+  .modal-slider-bar {
+    position: relative;
+    height: 56px;
+    margin-top: 16px;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    display: flex;
+    user-select: none;
+    -webkit-user-select: none;
+    overflow: hidden;
+  }
+  .modal-slider-labels {
+    display: flex;
+    width: 100%;
+    height: 100%;
+  }
+  .modal-slider-labels span {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    opacity: 0.6;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  .modal-slider-btn {
+    position: absolute;
+    top: 4px;
+    height: 48px;
+    width: calc(33.333% - 4px);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 800;
+    color: white;
+    cursor: pointer;
+    z-index: 2;
+    letter-spacing: 0.3px;
+    transition: left 0.2s ease, background 0.2s ease;
+    touch-action: none;
+    left: 33.333%;
+    background: #4CAF50;
+    margin-left: 2px;
+  }
+
 </style>
 </head>
 <body>
@@ -818,9 +870,21 @@
       <label>Исполнитель</label>
       <input type="text" id="newAssignee" placeholder="Имя (необязательно)">
     </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeCreateModal()">Отмена</button>
-      <button class="btn btn-primary" onclick="createTask()">Создать</button>
+    <div class="form-group">
+      <label>Содержание</label>
+      <textarea id="newBody" rows="6" style="width:100%;background:var(--bg-tertiary);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:14px;font-family:monospace;resize:vertical;line-height:1.6" placeholder="Что надо сделать подробно (опционально)..."></textarea>
+    </div>
+    <div class="modal-slider-bar" id="createSliderBar">
+      <div class="modal-slider-labels">
+        <span onclick="modalSliderMoveTo('create', 0)">Отмена</span>
+        <span onclick="modalSliderMoveTo('create', 1)">Создать</span>
+        <span onclick="modalSliderMoveTo('create', 2)">Запись!</span>
+      </div>
+      <div class="modal-slider-btn" id="createSliderBtn"
+        ontouchstart="modalSliderStart(event, 'create')"
+        ontouchmove="modalSliderMove(event, 'create')"
+        ontouchend="modalSliderEnd(event, 'create')"
+        onclick="modalSliderAction('create')">Создать</div>
     </div>
   </div>
 </div>
@@ -1370,9 +1434,11 @@ function switchView(view) {
 // ── Create modal ────────────────────────────────
 function showCreateModal() {
   document.getElementById('createModal').style.display = 'flex';
+  resetModalSlider('create');
   document.getElementById('newTitle').value = '';
   document.getElementById('newDue').value = '';
   document.getElementById('newAssignee').value = '';
+  document.getElementById('newBody').value = '';
   populateProjectSelect();
   setTimeout(() => document.getElementById('newTitle').focus(), 100);
 }
@@ -1491,10 +1557,11 @@ async function transcribeAudio(blob) {
     const data = await resp.json();
     if (data.text) {
       const title = document.getElementById('newTitle');
-      if (!title.value) {
-        title.value = data.text;
+      const body = document.getElementById('newBody');
+      if (!body.value) {
+        body.value = data.text;
       } else {
-        title.value += ' ' + data.text;
+        body.value += ' ' + data.text;
       }
       document.getElementById('voiceStatus').textContent = '✅ ' + data.text;
       setTimeout(() => { document.getElementById('voiceStatus').style.display = 'none'; }, 3000);
@@ -1512,6 +1579,7 @@ let editRecording = false;
 
 async function openEditModal(project, taskId) {
   document.getElementById('editModal').style.display = 'flex';
+  resetModalSlider('edit');
   document.getElementById('editVoiceStatus').style.display = 'none';
   document.getElementById('editModalId').textContent = '#' + taskId;
   document.getElementById('editTitle').value = 'Загрузка...';
@@ -1814,7 +1882,8 @@ async function quickVoiceCreate() {
         const data = await resp.json();
         if (data.text) {
           showCreateModal();
-          document.getElementById('newTitle').value = data.text;
+          document.getElementById('newBody').value = data.text;
+          document.getElementById('newTitle').focus();
         }
       } catch (e) {
         tg.showAlert('Ошибка транскрибации');
@@ -1928,6 +1997,169 @@ async function sliderAction() {
   setTimeout(() => { btn.textContent = origLabel; }, 1200);
 }
 
+
+// ── Modal slider (3-position) ──────────────────────────
+const MODAL_SLOTS = {
+  edit: [
+    { label: 'Отмена', color: '#e53935', action: 'cancelEdit' },
+    { label: 'Сохранить', color: '#4CAF50', action: 'saveEdit' },
+    { label: 'Запись!', color: '#e53935', action: 'recordEdit' },
+  ],
+  create: [
+    { label: 'Отмена', color: '#e53935', action: 'cancelCreate' },
+    { label: 'Создать', color: '#4CAF50', action: 'saveCreate' },
+    { label: 'Запись!', color: '#e53935', action: 'recordCreate' },
+  ],
+};
+let modalSliderState = {
+  edit: { index: 1, startX: 0, startLeft: 0, dragging: false },
+  create: { index: 1, startX: 0, startLeft: 0, dragging: false },
+};
+
+function modalSliderMoveTo(ctx, idx) {
+  modalSliderState[ctx].index = Math.max(0, Math.min(idx, 2));
+  const btn = document.getElementById(ctx + 'SliderBtn');
+  const slot = MODAL_SLOTS[ctx][modalSliderState[ctx].index];
+  btn.style.transition = 'left 0.25s ease, background 0.25s ease';
+  btn.style.left = (modalSliderState[ctx].index * 33.333) + '%';
+  btn.textContent = slot.label;
+  btn.style.background = slot.color;
+  if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+}
+
+function modalSliderStart(e, ctx) {
+  modalSliderState[ctx].dragging = false;
+  modalSliderState[ctx].startX = e.touches[0].clientX;
+  const btn = document.getElementById(ctx + 'SliderBtn');
+  modalSliderState[ctx].startLeft = btn.offsetLeft;
+  btn.style.transition = 'none';
+}
+
+function modalSliderMove(e, ctx) {
+  const dx = Math.abs(e.touches[0].clientX - modalSliderState[ctx].startX);
+  if (dx < 5) return;
+  e.preventDefault();
+  modalSliderState[ctx].dragging = true;
+  const delta = e.touches[0].clientX - modalSliderState[ctx].startX;
+  const bar = document.getElementById(ctx + 'SliderBar');
+  const btn = document.getElementById(ctx + 'SliderBtn');
+  const barW = bar.offsetWidth;
+  const slotW = barW / 3;
+  let newLeft = modalSliderState[ctx].startLeft + delta;
+  newLeft = Math.max(0, Math.min(newLeft, barW - slotW));
+  btn.style.left = newLeft + 'px';
+  const nearestIdx = Math.round(newLeft / slotW);
+  const clamped = Math.max(0, Math.min(nearestIdx, 2));
+  btn.textContent = MODAL_SLOTS[ctx][clamped].label;
+  btn.style.background = MODAL_SLOTS[ctx][clamped].color;
+}
+
+function modalSliderEnd(e, ctx) {
+  const btn = document.getElementById(ctx + 'SliderBtn');
+  const bar = document.getElementById(ctx + 'SliderBar');
+  const slotW = bar.offsetWidth / 3;
+  if (modalSliderState[ctx].dragging) {
+    const currentLeft = btn.offsetLeft;
+    const nearestIdx = Math.round(currentLeft / slotW);
+    modalSliderState[ctx].index = Math.max(0, Math.min(nearestIdx, 2));
+    btn.style.transition = 'left 0.2s ease, background 0.2s ease';
+    btn.style.left = (modalSliderState[ctx].index * 33.333) + '%';
+    const slot = MODAL_SLOTS[ctx][modalSliderState[ctx].index];
+    btn.textContent = slot.label;
+    btn.style.background = slot.color;
+    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+    modalSliderState[ctx].dragging = false;
+  } else {
+    modalSliderAction(ctx);
+  }
+}
+
+async function modalSliderAction(ctx) {
+  const slot = MODAL_SLOTS[ctx][modalSliderState[ctx].index];
+  if (slot.action === 'cancelEdit') closeEditModal();
+  else if (slot.action === 'saveEdit') await saveTask();
+  else if (slot.action === 'recordEdit') await toggleModalVoice('edit');
+  else if (slot.action === 'cancelCreate') closeCreateModal();
+  else if (slot.action === 'saveCreate') await createTask();
+  else if (slot.action === 'recordCreate') await toggleModalVoice('create');
+}
+
+// Reset slider to center when modal opens
+function resetModalSlider(ctx) {
+  modalSliderState[ctx].index = 1;
+  const btn = document.getElementById(ctx + 'SliderBtn');
+  if (btn) {
+    btn.style.transition = 'none';
+    btn.style.left = '33.333%';
+    btn.textContent = MODAL_SLOTS[ctx][1].label;
+    btn.style.background = MODAL_SLOTS[ctx][1].color;
+  }
+}
+
+// ── Cursor-aware voice recording for modals ──────────
+let modalRecorder = null;
+let modalChunks = [];
+let modalRecording = false;
+
+async function toggleModalVoice(ctx) {
+  const btn = document.getElementById(ctx + 'SliderBtn');
+  if (modalRecording) {
+    if (modalRecorder && modalRecorder.state !== 'inactive') modalRecorder.stop();
+    modalRecording = false;
+    btn.textContent = 'Распознаю...';
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    modalRecorder = new MediaRecorder(stream);
+    modalChunks = [];
+    modalRecorder.ondataavailable = e => modalChunks.push(e.data);
+    modalRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(modalChunks, { type: 'audio/ogg' });
+      try {
+        const resp = await fetch('/api/transcribe', {
+          method: 'POST',
+          headers: { 'Authorization': 'tma ' + tg.initData },
+          body: blob,
+        });
+        const data = await resp.json();
+        if (data.text) {
+          insertAtCursor(ctx, data.text);
+          if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+        }
+      } catch (e) {
+        alert('Ошибка транскрибации: ' + e.message);
+      }
+      // Reset slider back to Сохранить/Создать
+      resetModalSlider(ctx);
+    };
+    modalRecorder.start();
+    modalRecording = true;
+    btn.textContent = '⏹ Стоп';
+    btn.style.background = '#ff0000';
+    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+  } catch (e) {
+    alert('Нет доступа к микрофону');
+    resetModalSlider(ctx);
+  }
+}
+
+function insertAtCursor(ctx, text) {
+  const textareaId = ctx === 'edit' ? 'editBody' : 'newBody';
+  const ta = document.getElementById(textareaId);
+  if (!ta) return;
+  const start = ta.selectionStart ?? ta.value.length;
+  const end = ta.selectionEnd ?? ta.value.length;
+  const before = ta.value.substring(0, start);
+  const after = ta.value.substring(end);
+  const sep = (before && !before.endsWith(' ') && !before.endsWith('\n')) ? ' ' : '';
+  const insert = sep + text;
+  ta.value = before + insert + after;
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = start + insert.length;
+}
+
 </script>
 
 <!-- Edit modal -->
@@ -1977,9 +2209,17 @@ async function sliderAction() {
     </div>
     <input type="hidden" id="editProject">
     <input type="hidden" id="editTaskId">
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeEditModal()">Отмена</button>
-      <button class="btn btn-primary" onclick="saveTask()">Сохранить</button>
+    <div class="modal-slider-bar" id="editSliderBar">
+      <div class="modal-slider-labels">
+        <span onclick="modalSliderMoveTo('edit', 0)">Отмена</span>
+        <span onclick="modalSliderMoveTo('edit', 1)">Сохранить</span>
+        <span onclick="modalSliderMoveTo('edit', 2)">Запись!</span>
+      </div>
+      <div class="modal-slider-btn" id="editSliderBtn"
+        ontouchstart="modalSliderStart(event, 'edit')"
+        ontouchmove="modalSliderMove(event, 'edit')"
+        ontouchend="modalSliderEnd(event, 'edit')"
+        onclick="modalSliderAction('edit')">Сохранить</div>
     </div>
   </div>
 </div>
