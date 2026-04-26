@@ -6,7 +6,6 @@ import os
 import subprocess
 import tempfile
 import pytest
-from unittest.mock import patch
 
 
 # Set env for git_sync to import
@@ -50,7 +49,7 @@ def test_commit_and_push_no_changes(tmp_git_repo, monkeypatch):
     monkeypatch.setattr(git_sync, "_run", fake_run)
 
     # Empty repo, nothing to commit
-    result = git_sync.commit_and_push("test: no changes")
+    git_sync.commit_and_push("test: no changes")
     # Should not call push (nothing to commit)
     assert len(pushed) == 0
 
@@ -78,7 +77,7 @@ def test_commit_and_push_with_changes(tmp_git_repo, monkeypatch):
 
     monkeypatch.setattr(git_sync, "_run", fake_run)
 
-    result = git_sync.commit_and_push("test: with change")
+    git_sync.commit_and_push("test: with change")
     assert len(push_called) == 1
 
 

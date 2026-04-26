@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
-from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -103,6 +103,7 @@ class UpdateTaskRequest(BaseModel):
     title: str | None = None
     type: str | None = None
     tags: list[str] | None = None
+    body: str | None = None
 
 
 
@@ -171,21 +172,127 @@ app.mount("/static", StaticFiles(directory="/root/task-webapp/static"), name="st
 
 # ── Voice transcription endpoint ──────────────────
 
-@app.delete("/api/task/{project}/{task_id}")
-async def delete_task(project: str, task_id: int, authorization: str = Header(default="")):
+@app.post("/api/task/{project}/{task_id}/archive")
+async def archive_task_endpoint(project: str, task_id: int, authorization: str = Header(default="")):
+    """Move task to {project}/archive/. Recoverable from filesystem."""
     get_user(authorization)
     pull()
     ok = vault.archive_task(project, task_id)
     if not ok:
         raise HTTPException(404, "Task not found")
-    git_sync(f"archive: task {task_id} in {project}")
+    commit_and_push(f"archive: task {task_id} in {project}")
     return {"ok": True, "archived": True}
+
+
+@app.delete("/api/task/{project}/{task_id}")
+async def delete_task_endpoint(project: str, task_id: int, authorization: str = Header(default="")):
+    """Hard delete: remove file from working tree + commit the removal.
+    Only recoverable through git history."""
+    get_user(authorization)
+    pull()
+    ok = vault.delete_task(project, task_id)
+    if not ok:
+        raise HTTPException(404, "Task not found")
+    commit_and_push(f"delete: task {task_id} in {project}")
+    return {"ok": True, "deleted": True}
+
+
+class CommandRequest(BaseModel):
+    text: str
+    project: str
+    task_id: int
+    title: str = ""
+
+
+def _echo_to_telegram(text: str) -> None:
+    """Post the command text into the user's DM as a bot message so the
+    user sees what they sent (OpenClaw's LLM reply arrives separately)."""
+    import json as _json
+    import urllib.request
+    bot_token = os.environ.get("BOT_TOKEN", "")
+    chat_id = os.environ.get("CHAT_ID", "")
+    if not bot_token or not chat_id:
+        return
+    try:
+        payload = _json.dumps({
+            "chat_id": chat_id,
+            "text": "📨 " + text,
+            "disable_notification": True,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            data=payload,
+            headers={"Content-Type": "application/json", "User-Agent": "task-webapp/1.0"},
+        )
+        urllib.request.urlopen(req, timeout=10).read()
+    except Exception as e:
+        logger.warning("Telegram echo failed: %s", e)
+
+
+def _run_openclaw_agent(message: str) -> None:
+    """Run openclaw agent subprocess and log result (called in background thread).
+    --to <telegram_user_id> binds to the existing DM session so the agent
+    routes through the running gateway (fast). Without --to the CLI
+    falls back to an embedded agent that typically times out."""
+    import subprocess
+    telegram_user = os.environ.get("CHAT_ID") or os.environ.get("TELEGRAM_USER_ID", "")
+    if not telegram_user:
+        logger.error("CHAT_ID not set — cannot route /api/command to LLM")
+        return
+    try:
+        r = subprocess.run(
+            [
+                "openclaw", "agent",
+                "--agent", "main",
+                "--channel", "telegram",
+                "--to", telegram_user,
+                "--deliver",
+                "--message", message,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        logger.info(
+            "openclaw agent exit=%s stderr=%s stdout_tail=%s",
+            r.returncode,
+            (r.stderr or "")[:500],
+            (r.stdout or "")[-500:],
+        )
+    except subprocess.TimeoutExpired:
+        logger.error("openclaw agent timeout after 180s")
+    except Exception as e:
+        logger.exception("openclaw agent failed: %s", e)
+
+
+@app.post("/api/command")
+async def send_command(req: CommandRequest, authorization: str = Header(default="")):
+    """Wrap user text with task context and fire it into OpenClaw as a
+    user message. Fire-and-forget: LLM may think 10-30 s; webapp returns
+    immediately, response arrives in Telegram DM."""
+    get_user(authorization)
+    import threading
+    text = req.text.strip()
+    if not text:
+        raise HTTPException(400, "Empty command")
+    fp = vault.find_task_file(req.project, req.task_id)
+    rel_path = str(fp.relative_to(vault.root)) if fp else f"{req.project}/{req.task_id}-*.md"
+    title_part = f', название «{req.title}»' if req.title else ''
+    full_message = (
+        f"[Команда касается ТОЛЬКО задачи #{req.task_id} "
+        f"(проект «{req.project}», файл obsidian-tasks/{rel_path}{title_part}). "
+        f"Изменяй ТОЛЬКО этот файл. Другие задачи, расписание дня и связанные файлы не трогай.]\n"
+        f"{text}"
+    )
+    # Echo into chat so the user sees what was sent, then run the agent.
+    _echo_to_telegram(full_message)
+    threading.Thread(target=_run_openclaw_agent, args=(full_message,), daemon=True).start()
+    return {"ok": True, "sent": True}
 
 @app.post("/api/transcribe")
 async def transcribe_voice(request: Request, authorization: str = Header(default="")):
     get_user(authorization)
-    import tempfile, subprocess
-    content_type = request.headers.get("content-type", "")
+    import tempfile
     body = await request.body()
     if len(body) < 1000:
         raise HTTPException(400, "Audio too short")
@@ -201,8 +308,6 @@ async def transcribe_voice(request: Request, authorization: str = Header(default
         payload += f"--{boundary}\r\n".encode()
         payload += b"Content-Disposition: form-data; name=\"model\"\r\n\r\nwhisper-large-v3-turbo\r\n"
         payload += f"--{boundary}\r\n".encode()
-        payload += b"Content-Disposition: form-data; name=\"language\"\r\n\r\nru\r\n"
-        payload += f"--{boundary}\r\n".encode()
         payload += b"Content-Disposition: form-data; name=\"file\"; filename=\"voice.ogg\"\r\nContent-Type: audio/ogg\r\n\r\n"
         payload += audio_data + b"\r\n"
         payload += f"--{boundary}--\r\n".encode()
@@ -213,6 +318,7 @@ async def transcribe_voice(request: Request, authorization: str = Header(default
             headers={
                 "Authorization": f"Bearer {groq_key}",
                 "Content-Type": f"multipart/form-data; boundary={boundary}",
+                "User-Agent": "task-webapp/1.0",
             },
         )
         with urllib.request.urlopen(req, timeout=30) as resp:

@@ -77,11 +77,7 @@ def transcribe_ogg(ogg_path):
     body += f"--{boundary}\r\n".encode()
     body += b'Content-Disposition: form-data; name="model"\r\n\r\n'
     body += f"{GROQ_MODEL}\r\n".encode()
-    # language field
-    body += f"--{boundary}\r\n".encode()
-    body += b'Content-Disposition: form-data; name="language"\r\n\r\n'
-    body += b"ru\r\n"
-    # file field
+    # file field (no language hint — Whisper auto-detects)
     body += f"--{boundary}\r\n".encode()
     body += f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'.encode()
     body += b"Content-Type: audio/ogg\r\n\r\n"
@@ -95,6 +91,7 @@ def transcribe_ogg(ogg_path):
         headers={
             "Authorization": f"Bearer {GROQ_API_KEY}",
             "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "User-Agent": "voice-sidecar/2.0",
         },
     )
 
@@ -133,7 +130,11 @@ def delete_message(message_id):
     if result.get("ok"):
         log.info(f"Deleted voice message_id={message_id}")
         return True
-    log.warning(f"Could not delete message_id={message_id}: {result.get('description', '?')}")
+    desc = result.get("description", "?")
+    if "not found" in desc.lower() or "can't be deleted" in desc.lower():
+        log.info(f"Skip delete message_id={message_id}: {desc}")
+    else:
+        log.warning(f"Could not delete message_id={message_id}: {desc}")
     return False
 
 
@@ -160,8 +161,21 @@ def process_ogg(ogg_path):
     text = transcribe_ogg(ogg_path)
     if not text:
         log.warning(f"No transcript for {ogg_path.name}")
+        telegram_api(
+            "sendMessage",
+            {"chat_id": CHAT_ID, "text": "\u26a0\ufe0f Не удалось распознать голосовое"},
+        )
         save_processed(name)
         return
+
+    # Write .txt sibling so OpenClaw reuses our transcript instead of
+    # calling its own (slower) whisper pipeline.
+    txt_path = ogg_path.with_suffix(".txt")
+    if not txt_path.exists():
+        try:
+            txt_path.write_text(text, encoding="utf-8")
+        except OSError as e:
+            log.warning(f"Could not write {txt_path}: {e}")
 
     # Send transcript to Telegram
     echo_id = send_transcript(text)

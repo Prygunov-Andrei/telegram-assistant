@@ -698,6 +698,11 @@
   }
 
 
+  html {
+    background: #000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
   html, body {
     background: #1c1c1e !important;
     margin: 0 !important;
@@ -707,16 +712,42 @@
     overflow-x: hidden;
   }
   body {
+    background: #000 !important;
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
-    background-color: #1c1c1e !important;
   }
+  html { background: #000 !important; }
   .app-container {
     background: #1c1c1e !important;
     min-height: 100vh;
+    border-radius: 28px;
+    overflow: hidden;
   }
+
+  /* ── Safety-switch button (2-click confirm) ───────── */
+  .safety-btn {
+    background: var(--bg-tertiary);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  }
+  .safety-btn.safety-armed {
+    border-color: #ffd54f;
+    box-shadow: 0 0 0 2px rgba(255, 213, 79, 0.4) inset, 0 0 8px rgba(255, 213, 79, 0.3);
+    color: #ffd54f;
+  }
+  .cmd-btn-send.safety-armed { border-color:#4CAF50; color:#4CAF50; box-shadow:0 0 0 2px rgba(76,175,80,0.4) inset, 0 0 8px rgba(76,175,80,0.3); }
+  .cmd-btn-clear.safety-armed { border-color:#ff9800; color:#ff9800; box-shadow:0 0 0 2px rgba(255,152,0,0.4) inset, 0 0 8px rgba(255,152,0,0.3); }
 
   /* ── Modal slider (3-position: Отмена/Создать/Запись!) ─────── */
   .modal-slider-bar {
@@ -820,13 +851,12 @@
         <span ontouchend="event.preventDefault();sliderMoveTo(0)" onclick="sliderMoveTo(0)">ПУЛ</span>
         <span ontouchend="event.preventDefault();sliderMoveTo(1)" onclick="sliderMoveTo(1)">ПУШ</span>
         <span ontouchend="event.preventDefault();sliderMoveTo(2)" onclick="sliderMoveTo(2)">Создать</span>
-        <span ontouchend="event.preventDefault();sliderMoveTo(3)" onclick="sliderMoveTo(3)">ЗАПИСЬ!</span>
       </div>
       <div class="slider-btn" id="sliderBtn"
         ontouchstart="sliderTouchStart(event)"
         ontouchmove="sliderTouchMove(event)"
         ontouchend="sliderTouchEnd(event)"
-        style="left:75%;background:#e53935">ЗАПИСЬ!</div>
+        style="left:66.666%;background:#4CAF50">Создать</div>
     </div>
   </div>
 </div>
@@ -884,6 +914,7 @@
         ontouchstart="modalSliderStart(event, 'create')"
         ontouchmove="modalSliderMove(event, 'create')"
         ontouchend="modalSliderEnd(event, 'create')"
+        ontouchcancel="modalSliderEnd(event, 'create')"
         onclick="modalSliderAction('create')">Создать</div>
     </div>
   </div>
@@ -896,8 +927,8 @@
 // ── Telegram WebApp init ────────────────────────
 const tg = window.Telegram.WebApp;
 tg.ready();
-try { tg.requestFullscreen(); } catch (e) { console.warn('requestFullscreen not supported:', e.message); }
-try { tg.expand(); } catch (e) { console.warn('expand failed:', e.message); }
+try { tg.requestFullscreen(); } catch (e) {}
+try { tg.expand(); } catch (e) {}
 
 // Apply Telegram theme if available
 // Telegram theme is DISABLED — we force our dark theme always
@@ -1445,10 +1476,21 @@ function showCreateModal() {
 
 function closeCreateModal() {
   document.getElementById('createModal').style.display = 'none';
+  shieldClicks();
+}
+
+// Block touch/click events for a short window after a modal closes,
+// otherwise iOS WebView's synthetic click after touchend falls through
+// to the task row underneath and reopens it.
+function shieldClicks() {
+  document.body.style.pointerEvents = 'none';
+  setTimeout(() => { document.body.style.pointerEvents = ''; }, 400);
 }
 
 function closeModalOverlay(e) {
-  if (e.target === e.currentTarget) closeCreateModal();
+  if (e.target !== e.currentTarget) return;
+  if (e.currentTarget.id === 'editModal') closeEditModal();
+  else closeCreateModal();
 }
 
 async function createTask() {
@@ -1573,19 +1615,17 @@ async function transcribeAudio(blob) {
 }
 
 // ── Edit modal ──────────────────────────
-let editRecorder = null;
-let editChunks = [];
-let editRecording = false;
 
 async function openEditModal(project, taskId) {
   document.getElementById('editModal').style.display = 'flex';
   resetModalSlider('edit');
-  document.getElementById('editVoiceStatus').style.display = 'none';
   document.getElementById('editModalId').textContent = '#' + taskId;
   document.getElementById('editTitle').value = 'Загрузка...';
   document.getElementById('editBody').value = '';
+  document.getElementById('editCommand').value = '';
   document.getElementById('editProject').value = project;
   document.getElementById('editTaskId').value = taskId;
+  toggleTagsExpanded(false);  // always start collapsed
   try {
     const resp = await fetch('/api/task/' + project + '/' + taskId, {
       headers: { 'Authorization': 'tma ' + tg.initData }
@@ -1605,9 +1645,11 @@ async function openEditModal(project, taskId) {
 
 function closeEditModal() {
   document.getElementById('editModal').style.display = 'none';
+  releaseMicStream();
+  shieldClicks();
 }
 
-async function saveTask() {
+async function saveTask(opts = {}) {
   const project = document.getElementById('editProject').value;
   const taskId = document.getElementById('editTaskId').value;
   const tags = [...editTagsList];
@@ -1621,6 +1663,202 @@ async function saveTask() {
   };
   try {
     await apiPatch('/task/' + project + '/' + taskId, updates);
+    if (!opts.skipClose) {
+      closeEditModal();
+      _allTasksCache = null;
+      loadTasks();
+      if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    }
+  } catch (e) {
+    if (!opts.silent) alert('Ошибка: ' + e.message);
+    throw e;
+  }
+}
+
+// ── Tags collapse/expand ──────────────────────
+function toggleTagsExpanded(expand) {
+  const coll = document.getElementById('editTagsCollapsed');
+  const exp = document.getElementById('editTagsExpanded');
+  if (!coll || !exp) return;
+  coll.style.display = expand ? 'none' : 'block';
+  exp.style.display = expand ? 'block' : 'none';
+  if (!expand) {
+    const summary = editTagsList.length
+      ? editTagsList.slice(0, 3).join(', ') + (editTagsList.length > 3 ? `, +${editTagsList.length - 3}` : '')
+      : 'нет тегов';
+    document.getElementById('editTagsCollapsedSummary').textContent = summary;
+  }
+}
+
+// ── Command field: hold-to-record (bypasses the slider) ──────────
+// Mic stream is acquired once when modal opens and reused across
+// recordings to avoid repeated permission prompts on iOS.
+let cmdRecorder = null;
+let cmdChunks = [];
+let cmdRecording = false;
+let micStream = null;
+
+async function ensureMicStream() {
+  if (micStream && micStream.active) return micStream;
+  micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  return micStream;
+}
+
+function releaseMicStream() {
+  if (micStream) {
+    micStream.getTracks().forEach(t => t.stop());
+    micStream = null;
+  }
+}
+
+async function startCommandRecord(e) {
+  e.preventDefault();
+  if (cmdRecording) return;
+  const btn = document.getElementById('cmdRecordBtn');
+  try {
+    const stream = await ensureMicStream();
+    cmdRecorder = new MediaRecorder(stream);
+    cmdChunks = [];
+    cmdRecorder.ondataavailable = ev => cmdChunks.push(ev.data);
+    cmdRecorder.onstop = async () => {
+      // Don't stop stream tracks — keep mic warm for the next record.
+      btn.textContent = 'Распознаю...';
+      const blob = new Blob(cmdChunks, { type: 'audio/ogg' });
+      try {
+        const resp = await fetch('/api/transcribe', {
+          method: 'POST',
+          headers: { 'Authorization': 'tma ' + tg.initData },
+          body: blob,
+        });
+        const data = await resp.json();
+        if (data.text) {
+          const ta = document.getElementById('editCommand');
+          ta.value = ta.value
+            ? ta.value.replace(/\s*$/, '') + '\n' + data.text
+            : data.text;
+          if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+        } else {
+          alert('Пустой транскрипт');
+        }
+      } catch (err) {
+        alert('Ошибка транскрибации: ' + err.message);
+      }
+      btn.textContent = '🎙 Запись!';
+      btn.style.background = '';
+    };
+    cmdRecorder.start();
+    cmdRecording = true;
+    btn.textContent = '🔴 Запись...';
+    btn.style.background = '#e53935';
+    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+  } catch (err) {
+    alert('Нет доступа к микрофону');
+  }
+}
+
+function stopCommandRecord(e) {
+  if (e) e.preventDefault();
+  if (!cmdRecording) return;
+  cmdRecording = false;
+  if (cmdRecorder && cmdRecorder.state !== 'inactive') cmdRecorder.stop();
+  if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+}
+
+// ── Safety-switch button helper (2-click to execute) ──────────
+// 1st tap: arm (visual highlight + 3s timeout). 2nd tap: execute action.
+function bindSafetyButton(elId, action) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  let armed = false;
+  let timer = null;
+  let origLabel = el.textContent;
+  el.addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (!armed) {
+      armed = true;
+      origLabel = el.textContent;
+      el.classList.add('safety-armed');
+      el.textContent = '✓ ' + origLabel + '?';
+      if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+      timer = setTimeout(() => {
+        armed = false;
+        el.classList.remove('safety-armed');
+        el.textContent = origLabel;
+      }, 3000);
+    } else {
+      clearTimeout(timer);
+      armed = false;
+      el.classList.remove('safety-armed');
+      el.textContent = origLabel;
+      await action();
+    }
+  });
+}
+
+// ── Command: send to LLM via OpenClaw ──────────
+async function sendCommand() {
+  const text = document.getElementById('editCommand').value.trim();
+  if (!text) { alert('Пустая команда'); return; }
+  const project = document.getElementById('editProject').value;
+  const taskId = document.getElementById('editTaskId').value;
+  const title = document.getElementById('editTitle').value.trim();
+  try {
+    await saveTask({ skipClose: true, silent: true });
+  } catch (e) {
+    alert('Не удалось сохранить задачу перед отправкой: ' + e.message);
+    return;
+  }
+  fetch('/api/command', {
+    method: 'POST',
+    headers: { 'Authorization': 'tma ' + tg.initData, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, project, task_id: Number(taskId), title }),
+  }).catch(() => {});
+  closeEditModal();
+  _allTasksCache = null;
+  loadTasks();
+  if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+}
+
+// ── Delete / Archive from edit modal ──────────
+async function deleteTaskHard() {
+  const project = document.getElementById('editProject').value;
+  const taskId = document.getElementById('editTaskId').value;
+  const ask = (msg, cb) => { if (tg.showConfirm) tg.showConfirm(msg, cb); else cb(confirm(msg)); };
+  ask('⚠️ Удалить #' + taskId + ' безвозвратно?', async (ok) => {
+    if (!ok) return;
+    try {
+      const resp = await fetch('/api/task/' + project + '/' + taskId, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'tma ' + tg.initData },
+      });
+      if (!resp.ok) {
+        const t = await resp.text().catch(() => '');
+        alert('Не удалось удалить (' + resp.status + '): ' + t.slice(0, 200));
+        return;
+      }
+      closeEditModal();
+      _allTasksCache = null;
+      loadTasks();
+      if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('warning');
+    } catch (e) {
+      alert('Ошибка: ' + e.message);
+    }
+  });
+}
+
+async function archiveTaskFromModal() {
+  const project = document.getElementById('editProject').value;
+  const taskId = document.getElementById('editTaskId').value;
+  try {
+    const resp = await fetch('/api/task/' + project + '/' + taskId + '/archive', {
+      method: 'POST',
+      headers: { 'Authorization': 'tma ' + tg.initData },
+    });
+    if (!resp.ok) {
+      const t = await resp.text().catch(() => '');
+      alert('Не удалось архивировать (' + resp.status + '): ' + t.slice(0, 200));
+      return;
+    }
     closeEditModal();
     _allTasksCache = null;
     loadTasks();
@@ -1629,6 +1867,20 @@ async function saveTask() {
     alert('Ошибка: ' + e.message);
   }
 }
+
+// Wire command-field buttons: single tap = immediate action (no safety, no confirm).
+document.addEventListener('DOMContentLoaded', () => {
+  const clearBtn = document.getElementById('cmdClearBtn');
+  if (clearBtn) clearBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('editCommand').value = '';
+  });
+  const sendBtn = document.getElementById('cmdSendBtn');
+  if (sendBtn) sendBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    sendCommand();
+  });
+});
 async function cancelTask(project, taskId, rowEl) {
   try {
     const resp = await fetch('/api/task/' + project + '/' + taskId, {
@@ -1649,59 +1901,6 @@ async function cancelTask(project, taskId, rowEl) {
   }
 }
 
-
-async function toggleEditVoice() {
-  if (editRecording) {
-    if (editRecorder && editRecorder.state !== 'inactive') editRecorder.stop();
-    editRecording = false;
-    const btn = document.getElementById('editVoiceBtn');
-    btn.style.background = 'none';
-    btn.style.color = 'var(--accent)';
-    btn.style.borderColor = 'var(--accent)';
-    btn.innerHTML = '&#127908;';
-    document.getElementById('editVoiceStatus').textContent = '\u23f3 Транскрибирую...';
-    return;
-  }
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    editRecorder = new MediaRecorder(stream);
-    editChunks = [];
-    editRecorder.ondataavailable = e => editChunks.push(e.data);
-    editRecorder.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
-      const blob = new Blob(editChunks, { type: 'audio/ogg' });
-      try {
-        const resp = await fetch('/api/transcribe', {
-          method: 'POST',
-          headers: { 'Authorization': 'tma ' + tg.initData },
-          body: blob,
-        });
-        const data = await resp.json();
-        if (data.text) {
-          const bodyEl = document.getElementById('editBody');
-          if (bodyEl.value) bodyEl.value += '\n' + data.text;
-          else bodyEl.value = data.text;
-          document.getElementById('editVoiceStatus').textContent = '\u2705 ' + data.text;
-          setTimeout(() => { document.getElementById('editVoiceStatus').style.display = 'none'; }, 3000);
-        }
-      } catch (e) {
-        document.getElementById('editVoiceStatus').textContent = '\u274c Ошибка';
-        setTimeout(() => { document.getElementById('editVoiceStatus').style.display = 'none'; }, 3000);
-      }
-    };
-    editRecorder.start();
-    editRecording = true;
-    const btn = document.getElementById('editVoiceBtn');
-    btn.style.background = 'var(--red)';
-    btn.style.color = 'white';
-    btn.style.borderColor = 'var(--red)';
-    btn.innerHTML = '\u23f9';
-    document.getElementById('editVoiceStatus').style.display = 'block';
-    document.getElementById('editVoiceStatus').textContent = '\ud83d\udd34 Запись... Нажмите для остановки';
-  } catch (e) {
-    alert('Нет доступа к микрофону');
-  }
-}
 
 // Prevent row click when clicking status badge or date input
 document.addEventListener('click', function(e) {
@@ -1737,29 +1936,29 @@ function swipeMove(e, project, taskId) {
 function swipeEnd(e, project, taskId) {
   const row = document.getElementById('row-' + project + '-' + taskId);
   if (!swipeCurrentRow) return;
-  if (swipeCurrentRow.dir === 'left') {
-    setTimeout(() => {
-      if (confirm('Архивировать задачу #' + taskId + '?')) {
-        archiveTask(project, taskId, row);
-      } else {
-        row.classList.remove('swiped-left');
-      }
-    }, 100);
-  } else if (swipeCurrentRow.dir === 'right') {
-    setTimeout(() => {
-      if (confirm('Отменить задачу #' + taskId + '?')) {
-        cancelTask(project, taskId, row);
-      } else {
-        row.classList.remove('swiped-right');
-      }
-    }, 100);
+  const dir = swipeCurrentRow.dir;
+  swipeCurrentRow = null;
+  const ask = (msg, cb) => {
+    if (tg.showConfirm) tg.showConfirm(msg, cb);
+    else cb(confirm(msg));
+  };
+  if (dir === 'left') {
+    ask('Архивировать задачу #' + taskId + '?', (ok) => {
+      if (ok) archiveTask(project, taskId, row);
+      else row.classList.remove('swiped-left');
+    });
+  } else if (dir === 'right') {
+    ask('Отменить задачу #' + taskId + '?', (ok) => {
+      if (ok) cancelTask(project, taskId, row);
+      else row.classList.remove('swiped-right');
+    });
   }
 }
 
 async function archiveTask(project, taskId, rowEl) {
   try {
-    const resp = await fetch('/api/task/' + project + '/' + taskId, {
-      method: 'DELETE',
+    const resp = await fetch('/api/task/' + project + '/' + taskId + '/archive', {
+      method: 'POST',
       headers: { 'Authorization': 'tma ' + tg.initData },
     });
     if (resp.ok) {
@@ -1769,9 +1968,14 @@ async function archiveTask(project, taskId, rowEl) {
       rowEl.style.overflow = 'hidden';
       setTimeout(() => { _allTasksCache = null; loadTasks(); }, 400);
       if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    } else {
+      const text = await resp.text().catch(() => '');
+      alert('Не удалось архивировать (' + resp.status + '): ' + text.slice(0, 200));
+      rowEl.classList.remove('swiped-left');
     }
   } catch (e) {
     alert('Ошибка: ' + e.message);
+    rowEl.classList.remove('swiped-left');
   }
 }
 
@@ -1793,6 +1997,13 @@ function renderEditTags() {
   }
   container.innerHTML = h;
   document.getElementById('editTags').value = editTagsList.join(', ');
+  // Keep collapsed summary in sync
+  const sum = document.getElementById('editTagsCollapsedSummary');
+  if (sum) {
+    sum.textContent = editTagsList.length
+      ? editTagsList.slice(0, 3).join(', ') + (editTagsList.length > 3 ? `, +${editTagsList.length - 3}` : '')
+      : 'нет тегов';
+  }
 
   // Show suggestions (existing tags not yet added)
   const suggestions = Array.from(allExistingTags).filter(t => !editTagsList.includes(t)).sort();
@@ -1862,54 +2073,13 @@ async function syncPull() {
   }
 }
 
-// ── Quick voice create ──────────────────────
-async function quickVoiceCreate() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const recorder = new MediaRecorder(stream);
-    const chunks = [];
-    recorder.ondataavailable = e => chunks.push(e.data);
-    recorder.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
-      tg.showAlert('\u23f3 Транскрибирую...');
-      const blob = new Blob(chunks, { type: 'audio/ogg' });
-      try {
-        const resp = await fetch('/api/transcribe', {
-          method: 'POST',
-          headers: { 'Authorization': 'tma ' + tg.initData },
-          body: blob,
-        });
-        const data = await resp.json();
-        if (data.text) {
-          showCreateModal();
-          document.getElementById('newBody').value = data.text;
-          document.getElementById('newTitle').focus();
-        }
-      } catch (e) {
-        tg.showAlert('Ошибка транскрибации');
-      }
-    };
-    recorder.start();
-    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-    tg.showAlert('\ud83d\udd34 Говорите... Нажмите OK чтобы остановить');
-    // Stop after alert is dismissed
-    setTimeout(() => {
-      if (recorder.state !== 'inactive') recorder.stop();
-    }, 200);
-  } catch (e) {
-    tg.showAlert('Нет доступа к микрофону');
-  }
-}
-
-
 // ── Slider button ──────────────────────────
 const SLIDER_SLOTS = [
   { label: 'ПУЛ', color: '#1976D2', action: 'pull' },
   { label: 'ПУШ', color: '#1976D2', action: 'push' },
   { label: 'Создать', color: '#4CAF50', action: 'create' },
-  { label: 'ЗАПИСЬ!', color: '#e53935', action: 'record' },
 ];
-let sliderIndex = 3; // default: ЗАПИСЬ!
+let sliderIndex = 2; // default: Создать
 let sliderStartX = 0;
 let sliderStartLeft = 0;
 let sliderDragging = false;
@@ -1931,14 +2101,14 @@ function sliderTouchMove(e) {
   const bar = document.getElementById('sliderBar');
   const btn = document.getElementById('sliderBtn');
   const barW = bar.offsetWidth;
-  const slotW = barW / 4;
+  const slotW = barW / 3;
   let newLeft = sliderStartLeft + dx;
   newLeft = Math.max(0, Math.min(newLeft, barW - slotW));
   btn.style.left = newLeft + 'px';
 
   // Snap preview: update text/color based on nearest slot
   const nearestIdx = Math.round(newLeft / slotW);
-  const clamped = Math.max(0, Math.min(nearestIdx, 3));
+  const clamped = Math.max(0, Math.min(nearestIdx, 2));
   btn.textContent = SLIDER_SLOTS[clamped].label;
   btn.style.background = SLIDER_SLOTS[clamped].color;
 }
@@ -1946,14 +2116,14 @@ function sliderTouchMove(e) {
 function sliderTouchEnd(e) {
   const btn = document.getElementById('sliderBtn');
   const bar = document.getElementById('sliderBar');
-  const slotW = bar.offsetWidth / 4;
+  const slotW = bar.offsetWidth / 3;
 
   if (sliderDragging) {
     const currentLeft = btn.offsetLeft;
     const nearestIdx = Math.round(currentLeft / slotW);
-    sliderIndex = Math.max(0, Math.min(nearestIdx, 3));
+    sliderIndex = Math.max(0, Math.min(nearestIdx, 2));
     btn.style.transition = 'left 0.2s ease, background 0.2s ease';
-    btn.style.left = (sliderIndex * 25) + '%';
+    btn.style.left = (sliderIndex * 33.333) + '%';
     btn.textContent = SLIDER_SLOTS[sliderIndex].label;
     btn.style.background = SLIDER_SLOTS[sliderIndex].color;
     if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
@@ -1966,10 +2136,10 @@ function sliderTouchEnd(e) {
 
 
 function sliderMoveTo(idx) {
-  sliderIndex = Math.max(0, Math.min(idx, 3));
+  sliderIndex = Math.max(0, Math.min(idx, 2));
   const btn = document.getElementById('sliderBtn');
   btn.style.transition = 'left 0.25s ease, background 0.25s ease';
-  btn.style.left = (sliderIndex * 25) + '%';
+  btn.style.left = (sliderIndex * 33.333) + '%';
   btn.textContent = SLIDER_SLOTS[sliderIndex].label;
   btn.style.background = SLIDER_SLOTS[sliderIndex].color;
   if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
@@ -1989,21 +2159,19 @@ async function sliderAction() {
   } else if (slot.action === 'create') {
     showCreateModal();
     return;
-  } else if (slot.action === 'record') {
-    quickVoiceCreate();
-    return;
   }
 
   setTimeout(() => { btn.textContent = origLabel; }, 1200);
 }
 
 
-// ── Modal slider (3-position) ──────────────────────────
+// ── Modal slider (variable length per context) ──────────
 const MODAL_SLOTS = {
   edit: [
     { label: 'Отмена', color: '#e53935', action: 'cancelEdit' },
     { label: 'Сохранить', color: '#4CAF50', action: 'saveEdit' },
-    { label: 'Запись!', color: '#e53935', action: 'recordEdit' },
+    { label: 'Удалить', color: '#b71c1c', action: 'deleteEdit' },
+    { label: 'Архив', color: '#455A64', action: 'archiveEdit' },
   ],
   create: [
     { label: 'Отмена', color: '#e53935', action: 'cancelCreate' },
@@ -2011,23 +2179,34 @@ const MODAL_SLOTS = {
     { label: 'Запись!', color: '#e53935', action: 'recordCreate' },
   ],
 };
+function _modalDefaultIdx(ctx) { return 1; }  // default to Save/Create
+function _modalSlotCount(ctx) { return MODAL_SLOTS[ctx].length; }
+function _modalStep(ctx) { return 100 / _modalSlotCount(ctx); }
 let modalSliderState = {
   edit: { index: 1, startX: 0, startLeft: 0, dragging: false },
   create: { index: 1, startX: 0, startLeft: 0, dragging: false },
 };
 
 function modalSliderMoveTo(ctx, idx) {
-  modalSliderState[ctx].index = Math.max(0, Math.min(idx, 2));
+  const n = _modalSlotCount(ctx);
+  modalSliderState[ctx].index = Math.max(0, Math.min(idx, n - 1));
   const btn = document.getElementById(ctx + 'SliderBtn');
   const slot = MODAL_SLOTS[ctx][modalSliderState[ctx].index];
   btn.style.transition = 'left 0.25s ease, background 0.25s ease';
-  btn.style.left = (modalSliderState[ctx].index * 33.333) + '%';
+  btn.style.left = (modalSliderState[ctx].index * _modalStep(ctx)) + '%';
   btn.textContent = slot.label;
   btn.style.background = slot.color;
   if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
 }
 
 function modalSliderStart(e, ctx) {
+  // Hold-to-record only for create modal's "Запись!" slot (index 2, action recordCreate).
+  // Edit modal's voice is now in a separate cmdRecordBtn button — not here.
+  if (ctx === 'create' && modalSliderState[ctx].index === 2) {
+    e.preventDefault();
+    startModalRecord(ctx);
+    return;
+  }
   modalSliderState[ctx].dragging = false;
   modalSliderState[ctx].startX = e.touches[0].clientX;
   const btn = document.getElementById(ctx + 'SliderBtn');
@@ -2036,6 +2215,7 @@ function modalSliderStart(e, ctx) {
 }
 
 function modalSliderMove(e, ctx) {
+  if (modalHoldRecording[ctx]) return;
   const dx = Math.abs(e.touches[0].clientX - modalSliderState[ctx].startX);
   if (dx < 5) return;
   e.preventDefault();
@@ -2043,33 +2223,41 @@ function modalSliderMove(e, ctx) {
   const delta = e.touches[0].clientX - modalSliderState[ctx].startX;
   const bar = document.getElementById(ctx + 'SliderBar');
   const btn = document.getElementById(ctx + 'SliderBtn');
+  const n = _modalSlotCount(ctx);
   const barW = bar.offsetWidth;
-  const slotW = barW / 3;
+  const slotW = barW / n;
   let newLeft = modalSliderState[ctx].startLeft + delta;
   newLeft = Math.max(0, Math.min(newLeft, barW - slotW));
   btn.style.left = newLeft + 'px';
   const nearestIdx = Math.round(newLeft / slotW);
-  const clamped = Math.max(0, Math.min(nearestIdx, 2));
+  const clamped = Math.max(0, Math.min(nearestIdx, n - 1));
   btn.textContent = MODAL_SLOTS[ctx][clamped].label;
   btn.style.background = MODAL_SLOTS[ctx][clamped].color;
 }
 
 function modalSliderEnd(e, ctx) {
+  if (modalHoldRecording[ctx]) {
+    e.preventDefault();
+    stopModalRecord(ctx);
+    return;
+  }
   const btn = document.getElementById(ctx + 'SliderBtn');
   const bar = document.getElementById(ctx + 'SliderBar');
-  const slotW = bar.offsetWidth / 3;
+  const n = _modalSlotCount(ctx);
+  const slotW = bar.offsetWidth / n;
   if (modalSliderState[ctx].dragging) {
     const currentLeft = btn.offsetLeft;
     const nearestIdx = Math.round(currentLeft / slotW);
-    modalSliderState[ctx].index = Math.max(0, Math.min(nearestIdx, 2));
+    modalSliderState[ctx].index = Math.max(0, Math.min(nearestIdx, n - 1));
     btn.style.transition = 'left 0.2s ease, background 0.2s ease';
-    btn.style.left = (modalSliderState[ctx].index * 33.333) + '%';
+    btn.style.left = (modalSliderState[ctx].index * _modalStep(ctx)) + '%';
     const slot = MODAL_SLOTS[ctx][modalSliderState[ctx].index];
     btn.textContent = slot.label;
     btn.style.background = slot.color;
     if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
     modalSliderState[ctx].dragging = false;
   } else {
+    e.preventDefault();
     modalSliderAction(ctx);
   }
 }
@@ -2078,37 +2266,33 @@ async function modalSliderAction(ctx) {
   const slot = MODAL_SLOTS[ctx][modalSliderState[ctx].index];
   if (slot.action === 'cancelEdit') closeEditModal();
   else if (slot.action === 'saveEdit') await saveTask();
-  else if (slot.action === 'recordEdit') await toggleModalVoice('edit');
+  else if (slot.action === 'deleteEdit') await deleteTaskHard();
+  else if (slot.action === 'archiveEdit') await archiveTaskFromModal();
   else if (slot.action === 'cancelCreate') closeCreateModal();
   else if (slot.action === 'saveCreate') await createTask();
-  else if (slot.action === 'recordCreate') await toggleModalVoice('create');
+  // recordCreate is hold-to-record — handled in touchstart/end
 }
 
-// Reset slider to center when modal opens
 function resetModalSlider(ctx) {
-  modalSliderState[ctx].index = 1;
+  const idx = _modalDefaultIdx(ctx);
+  modalSliderState[ctx].index = idx;
   const btn = document.getElementById(ctx + 'SliderBtn');
   if (btn) {
     btn.style.transition = 'none';
-    btn.style.left = '33.333%';
-    btn.textContent = MODAL_SLOTS[ctx][1].label;
-    btn.style.background = MODAL_SLOTS[ctx][1].color;
+    btn.style.left = (idx * _modalStep(ctx)) + '%';
+    btn.textContent = MODAL_SLOTS[ctx][idx].label;
+    btn.style.background = MODAL_SLOTS[ctx][idx].color;
   }
 }
 
-// ── Cursor-aware voice recording for modals ──────────
+// ── Push-to-talk voice recording for modal slider ──────────
 let modalRecorder = null;
 let modalChunks = [];
-let modalRecording = false;
+let modalHoldRecording = { edit: false, create: false };
 
-async function toggleModalVoice(ctx) {
+async function startModalRecord(ctx) {
+  if (modalHoldRecording[ctx]) return;
   const btn = document.getElementById(ctx + 'SliderBtn');
-  if (modalRecording) {
-    if (modalRecorder && modalRecorder.state !== 'inactive') modalRecorder.stop();
-    modalRecording = false;
-    btn.textContent = 'Распознаю...';
-    return;
-  }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     modalRecorder = new MediaRecorder(stream);
@@ -2116,6 +2300,7 @@ async function toggleModalVoice(ctx) {
     modalRecorder.ondataavailable = e => modalChunks.push(e.data);
     modalRecorder.onstop = async () => {
       stream.getTracks().forEach(t => t.stop());
+      btn.textContent = 'Распознаю...';
       const blob = new Blob(modalChunks, { type: 'audio/ogg' });
       try {
         const resp = await fetch('/api/transcribe', {
@@ -2125,18 +2310,22 @@ async function toggleModalVoice(ctx) {
         });
         const data = await resp.json();
         if (data.text) {
-          insertAtCursor(ctx, data.text);
+          const bodyEl = document.getElementById(ctx === 'edit' ? 'editBody' : 'newBody');
+          bodyEl.value = bodyEl.value
+            ? bodyEl.value.replace(/\s*$/, '') + '\n' + data.text
+            : data.text;
           if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+        } else {
+          alert('Пустой транскрипт');
         }
       } catch (e) {
         alert('Ошибка транскрибации: ' + e.message);
       }
-      // Reset slider back to Сохранить/Создать
       resetModalSlider(ctx);
     };
     modalRecorder.start();
-    modalRecording = true;
-    btn.textContent = '⏹ Стоп';
+    modalHoldRecording[ctx] = true;
+    btn.textContent = '🔴 Запись...';
     btn.style.background = '#ff0000';
     if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
   } catch (e) {
@@ -2145,19 +2334,13 @@ async function toggleModalVoice(ctx) {
   }
 }
 
-function insertAtCursor(ctx, text) {
-  const textareaId = ctx === 'edit' ? 'editBody' : 'newBody';
-  const ta = document.getElementById(textareaId);
-  if (!ta) return;
-  const start = ta.selectionStart ?? ta.value.length;
-  const end = ta.selectionEnd ?? ta.value.length;
-  const before = ta.value.substring(0, start);
-  const after = ta.value.substring(end);
-  const sep = (before && !before.endsWith(' ') && !before.endsWith('\n')) ? ' ' : '';
-  const insert = sep + text;
-  ta.value = before + insert + after;
-  ta.focus();
-  ta.selectionStart = ta.selectionEnd = start + insert.length;
+function stopModalRecord(ctx) {
+  if (!modalHoldRecording[ctx]) return;
+  modalHoldRecording[ctx] = false;
+  if (modalRecorder && modalRecorder.state !== 'inactive') {
+    modalRecorder.stop();
+  }
+  if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
 }
 
 </script>
@@ -2165,60 +2348,60 @@ function insertAtCursor(ctx, text) {
 <!-- Edit modal -->
 <div class="modal-overlay" id="editModal" style="display:none;" onclick="closeModalOverlay(event)">
   <div class="modal" style="max-width:700px;max-height:85vh;overflow-y:auto">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <span style="font-size:16px;color:var(--text-secondary)" id="editModalId">#000</span>
-      <button id="editVoiceBtn" onclick="toggleEditVoice()" style="background:none;border:2px solid var(--accent);border-radius:50%;width:44px;height:44px;font-size:22px;cursor:pointer;color:var(--accent)">&#127908;</button>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+      <span id="editModalId" style="flex-shrink:0;font-size:14px;color:var(--text-secondary);padding:6px 10px;background:var(--bg-tertiary);border-radius:8px">#000</span>
+      <input type="text" id="editTitle" placeholder="Название" style="flex:1;font-size:17px;font-weight:600;padding:10px" autocomplete="off">
     </div>
-    <div id="editVoiceStatus" style="display:none;background:var(--bg-tertiary);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:14px;color:var(--text-secondary)"></div>
-    <div class="form-group">
-      <label>Название</label>
-      <input type="text" id="editTitle" style="font-size:18px;font-weight:600;padding:12px" autocomplete="off">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+      <select id="editStatus">
+        <option value="todo">Todo</option>
+        <option value="in_progress">В работе</option>
+        <option value="done">Выполнено</option>
+        <option value="cancelled">Отменено</option>
+        <option value="backlog">Backlog</option>
+      </select>
+      <input type="date" id="editDue" style="-webkit-appearance:none;background:var(--bg-tertiary);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;width:100%">
+      <input type="text" id="editAssignee" placeholder="Исполнитель">
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group">
-        <label>Статус</label>
-        <select id="editStatus">
-          <option value="todo">Todo</option>
-          <option value="in_progress">В работе</option>
-          <option value="done">Выполнено</option>
-          <option value="cancelled">Отменено</option>
-          <option value="backlog">Backlog</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Дедлайн</label>
-        <input type="date" id="editDue" style="-webkit-appearance:none;background:var(--bg-tertiary);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:15px;width:100%">
-      </div>
-    </div>
-    <div class="form-group">
-      <label>Исполнитель</label>
-      <input type="text" id="editAssignee" placeholder="Имя">
-    </div>
-    <div class="form-group">
-      <label>Теги (подразделы)</label>
+    <!-- Tags: collapsed summary by default, tap to expand -->
+    <div id="editTagsCollapsed" onclick="toggleTagsExpanded(true)" style="cursor:pointer;padding:8px 12px;background:var(--bg-tertiary);border-radius:8px;margin-bottom:12px;font-size:14px;color:var(--text-secondary);user-select:none">🏷 <span id="editTagsCollapsedSummary">нет тегов</span> ▼</div>
+    <div id="editTagsExpanded" style="display:none;margin-bottom:12px">
       <div id="editTagsContainer" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
       <div style="display:flex;gap:8px">
         <input type="text" id="editTagInput" placeholder="Новый тег..." style="font-size:15px;flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addEditTag();}">
         <button class="btn btn-secondary" onclick="addEditTag()" style="padding:8px 16px;white-space:nowrap">+</button>
+        <button class="btn btn-secondary" onclick="toggleTagsExpanded(false)" style="padding:8px 12px">▲</button>
       </div>
       <input type="hidden" id="editTags">
     </div>
-    <div class="form-group">
-      <label>Содержание</label>
-      <textarea id="editBody" rows="12" style="width:100%;background:var(--bg-tertiary);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:14px;font-family:monospace;resize:vertical;line-height:1.6" placeholder="Markdown содержимое задачи..."></textarea>
+    <!-- Command block: textarea + vertical stack of 3 safety-switch buttons -->
+    <div style="display:grid;grid-template-columns:1fr 140px;gap:8px;margin-bottom:12px">
+      <textarea id="editCommand" rows="5" style="background:var(--bg-tertiary);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;resize:vertical;line-height:1.5" placeholder="Команда для LLM..."></textarea>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button class="safety-btn cmd-btn-record" id="cmdRecordBtn"
+          ontouchstart="startCommandRecord(event)"
+          ontouchend="stopCommandRecord(event)"
+          ontouchcancel="stopCommandRecord(event)">🎙 Запись!</button>
+        <button class="safety-btn cmd-btn-clear" id="cmdClearBtn">Очистить</button>
+        <button class="safety-btn cmd-btn-send" id="cmdSendBtn">Отправить</button>
+      </div>
     </div>
+    <textarea id="editBody" rows="10" style="width:100%;background:var(--bg-tertiary);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;font-family:monospace;resize:vertical;line-height:1.6;margin-bottom:12px" placeholder="Содержание (markdown)..."></textarea>
     <input type="hidden" id="editProject">
     <input type="hidden" id="editTaskId">
-    <div class="modal-slider-bar" id="editSliderBar">
+    <!-- Bottom slider: 4 slots — Отмена / Сохранить / Удалить / Архивировать -->
+    <div class="modal-slider-bar modal-slider-bar-4" id="editSliderBar">
       <div class="modal-slider-labels">
         <span onclick="modalSliderMoveTo('edit', 0)">Отмена</span>
         <span onclick="modalSliderMoveTo('edit', 1)">Сохранить</span>
-        <span onclick="modalSliderMoveTo('edit', 2)">Запись!</span>
+        <span onclick="modalSliderMoveTo('edit', 2)">Удалить</span>
+        <span onclick="modalSliderMoveTo('edit', 3)">Архив</span>
       </div>
       <div class="modal-slider-btn" id="editSliderBtn"
         ontouchstart="modalSliderStart(event, 'edit')"
         ontouchmove="modalSliderMove(event, 'edit')"
         ontouchend="modalSliderEnd(event, 'edit')"
+        ontouchcancel="modalSliderEnd(event, 'edit')"
         onclick="modalSliderAction('edit')">Сохранить</div>
     </div>
   </div>

@@ -22,10 +22,8 @@ TASK_DIRS=(
   "avgust/ERP_Avgust/ЗАДАЧИ"
   "books/ЗАДАЧИ"
   "deutsch/ЗАДАЧИ"
-  "gt24realestate.de/ЗАДАЧИ"
-  "kaz_nach_berlin/ЗАДАЧИ"
+  "realestate/ЗАДАЧИ"
   "life/ЗАДАЧИ"
-  "life/ЗАДАЧИ_RECURRING"
 )
 
 # 1. Clone or pull git repo
@@ -42,6 +40,29 @@ for dir in "${TASK_DIRS[@]}"; do
   rsync -a --update "$GIT_REPO/$dir/" "$OBSIDIAN/$dir/" 2>/dev/null || true
 done
 rsync -a --update "$GIT_REPO/ДАШБОРД.md" "$OBSIDIAN/ДАШБОРД.md" 2>/dev/null || true
+
+# 2b. Dedupe: if the same filename exists both in a task dir AND in its
+# `archive/` subfolder, the archive version wins (bot explicitly moved it
+# there). Remove the active copy from both Obsidian and GIT_REPO so the
+# next rsync push doesn't resurrect it. This is the only safe way to
+# propagate bot-side archive moves given rsync's no-delete semantics.
+dedupe_against_archive() {
+  local root=$1
+  for dir in "${TASK_DIRS[@]}"; do
+    local full="$root/$dir"
+    [ -d "$full/archive" ] || continue
+    for archived in "$full/archive/"*.md; do
+      [ -f "$archived" ] || continue
+      local base
+      base=$(basename "$archived")
+      if [ -f "$full/$base" ]; then
+        rm -f "$full/$base"
+      fi
+    done
+  done
+}
+dedupe_against_archive "$OBSIDIAN"
+dedupe_against_archive "$GIT_REPO"
 
 # 3. Push: Obsidian → GitHub (мак → бот)
 for dir in "${TASK_DIRS[@]}"; do

@@ -6,7 +6,6 @@ end up in the expected state on disk.
 import os
 os.environ.setdefault("BOT_TOKEN", "test:token")
 
-from pathlib import Path
 from vault import VaultAdapter
 
 

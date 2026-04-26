@@ -7,6 +7,9 @@ ExecStart=/usr/bin/python3 /root/voice-sidecar/main.py
 Restart=always
 RestartSec=5
 Environment=HOME=/root
+EnvironmentFile=-/root/.env
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=default.target

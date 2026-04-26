@@ -96,6 +96,20 @@ def test_archive_nonexistent(tmp_vault):
     assert vault.archive_task("life", 99999) is False
 
 
+def test_delete_task_removes_file(tmp_vault):
+    vault = Vault(str(tmp_vault))
+    fp = vault.find_task_file("life", 100)
+    assert fp is not None and fp.exists()
+    assert vault.delete_task("life", 100) is True
+    assert vault.find_task_file("life", 100) is None
+    assert not fp.exists()
+
+
+def test_delete_nonexistent(tmp_vault):
+    vault = Vault(str(tmp_vault))
+    assert vault.delete_task("life", 99999) is False
+
+
 def test_project_counts(tmp_vault):
     vault = Vault(str(tmp_vault))
     counts = vault.project_counts(open_only=True)
