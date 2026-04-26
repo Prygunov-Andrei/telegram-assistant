@@ -304,22 +304,22 @@ class VaultAdapter:
         if overdue:
             lines.append(f"### ⚠️ Просрочено ({len(overdue)})\n")
             for t in overdue:
-                lines.append(f"- [ ] {wikilink(t)} ({t['due']})\n")
+                lines.append(f"- {wikilink(t)} ({t['due']})\n")
             lines.append("\n")
         if today_tasks:
             lines.append(f"### На сегодня ({len(today_tasks)})\n")
             for t in today_tasks:
-                lines.append(f"- [ ] {wikilink(t)}\n")
+                lines.append(f"- {wikilink(t)}\n")
             lines.append("\n")
         if in_progress:
             lines.append(f"### В работе ({len(in_progress)})\n")
             for t in in_progress:
-                lines.append(f"- [ ] {wikilink(t)}\n")
+                lines.append(f"- {wikilink(t)}\n")
             lines.append("\n")
         if recurring:
             lines.append(f"### 🔁 Регулярные ({len(recurring)})\n")
             for t in sorted(recurring, key=lambda x: x.get("recurring", "")):
-                lines.append(f"- [ ] {wikilink(t)} — *{t['recurring']}*\n")
+                lines.append(f"- {wikilink(t)} — *{t['recurring']}*\n")
             lines.append("\n")
 
         lines.append("---\n\n## По проектам\n\n")
@@ -345,7 +345,7 @@ class VaultAdapter:
                     suffix += f" 🔁 {t['recurring']}"
                 if t.get("subproject"):
                     suffix += f" [{t['subproject']}]"
-                lines.append(f"- [ ] {wikilink(t)}{suffix}\n")
+                lines.append(f"- {wikilink(t)}{suffix}\n")
             lines.append("\n")
 
         (self.root / "ДАШБОРД.md").write_text("".join(lines), encoding="utf-8")

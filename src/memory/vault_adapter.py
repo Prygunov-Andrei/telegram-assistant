@@ -281,15 +281,15 @@ class VaultAdapter:
                             suffix += f", до {dt.day} {RU_MONTHS[dt.month]}"
                         except ValueError:
                             pass
-                    delegated.append(f"- [ ] {wikilink} — {suffix}")
+                    delegated.append(f"- {wikilink} — {suffix}")
                 elif due:
                     try:
                         formatted_due = display_due(due)
                     except ValueError:
                         formatted_due = due
-                    with_due.append((due, f"- [ ] {wikilink} — {formatted_due}"))
+                    with_due.append((due, f"- {wikilink} — {formatted_due}"))
                 else:
-                    someday.append(f"- [ ] {wikilink}")
+                    someday.append(f"- {wikilink}")
 
         with_due.sort(key=lambda row: row[0])
 
@@ -525,9 +525,9 @@ class VaultAdapter:
             else:
                 entry = f"#{tid} {title}" if tid else title
             if time_str:
-                lines.append(f"> - [ ] {time_str} — {entry}")
+                lines.append(f"> - {time_str} — {entry}")
             else:
-                lines.append(f"> - [ ] {entry}")
+                lines.append(f"> - {entry}")
 
         for t in due_tasks:
             title = str(t.get("title") or "")
@@ -535,7 +535,7 @@ class VaultAdapter:
             wiki_path = t.get("_wiki_path", "")
             display = f"#{tid} {title}" if tid else title
             entry = f"[[{wiki_path}|{display}]]" if wiki_path else display
-            lines.append(f"> - [ ] {entry} (дедлайн сегодня)")
+            lines.append(f"> - {entry} (дедлайн сегодня)")
 
         today_section = f"## 📅 Сегодня — {date_header}\n\n> [!todo]+ Задачи на день\n"
         if lines:

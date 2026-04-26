@@ -28,6 +28,12 @@ TASK_DIRS=(
   "задачи/books"
 )
 
+# 0. Regenerate dashboard from current task statuses
+#    (статусы могут меняться вручную в Obsidian — выпадающий список через
+#    Metadata Menu пишет в frontmatter, но дашборд сам не обновляется)
+PYTHONPATH="$OBSIDIAN_VAULT/telegram-assistant/vps/task-webapp" \
+  python3 -c "from vault import VaultAdapter; VaultAdapter('$OBSIDIAN_VAULT').regenerate_dashboard()" 2>/dev/null || true
+
 # 1. Clone or pull git repo
 if [ ! -d "$GIT_REPO/.git" ]; then
   git clone "$GITHUB_URL" "$GIT_REPO"
