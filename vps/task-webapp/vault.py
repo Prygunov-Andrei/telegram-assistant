@@ -10,13 +10,13 @@ import yaml
 STATUS_CLOSED = {"done", "cancelled"}
 
 COMMAND_PATHS = {
-    "life": "life/ЗАДАЧИ",
-    "realestate": "realestate/ЗАДАЧИ",
-    "avgust": "avgust/ЗАДАЧИ",
-    "erp": "avgust/ERP_Avgust/ЗАДАЧИ",
-    "deutsch": "deutsch/ЗАДАЧИ",
-    "april": "april/ЗАДАЧИ",
-    "books": "books/ЗАДАЧИ",
+    "life": "задачи/life",
+    "realestate": "задачи/realestate",
+    "avgust": "задачи/avgust",
+    "erp": "задачи/avgust-erp",
+    "deutsch": "задачи/deutsch",
+    "april": "задачи/april",
+    "books": "задачи/books",
 }
 
 PROJECT_DISPLAY = {

@@ -86,7 +86,7 @@ def test_archive_task(tmp_vault):
     assert vault.archive_task("life", 100) is True
     # Original should be gone, file should be in archive/
     assert vault.find_task_file("life", 100) is None
-    archive_dir = tmp_vault / "life" / "ЗАДАЧИ" / "archive"
+    archive_dir = tmp_vault / "задачи" / "life" / "archive"
     assert archive_dir.exists()
     assert len(list(archive_dir.glob("100-*.md"))) == 1
 

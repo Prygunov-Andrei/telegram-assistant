@@ -16,18 +16,17 @@ def tmp_vault():
     tmp = tempfile.mkdtemp()
     root = Path(tmp)
 
-    # Create project dirs
+    # Create project dirs (новая структура: задачи/<project>/)
     projects = [
-        "life/ЗАДАЧИ",
-        "life/ЗАДАЧИ_RECURRING",
-        "april/ЗАДАЧИ",
-        "avgust/ЗАДАЧИ",
+        "задачи/life",
+        "задачи/april",
+        "задачи/avgust",
     ]
     for p in projects:
         (root / p).mkdir(parents=True)
 
     # Create sample tasks
-    (root / "life/ЗАДАЧИ/100-buy-milk.md").write_text(
+    (root / "задачи/life/100-buy-milk.md").write_text(
         "---\n"
         "task_id: 100\n"
         "title: Купить молоко\n"
@@ -43,7 +42,7 @@ def tmp_vault():
         "Обычное, 3.5%\n",
         encoding="utf-8",
     )
-    (root / "life/ЗАДАЧИ/101-run-7km.md").write_text(
+    (root / "задачи/life/101-run-7km.md").write_text(
         "---\n"
         "task_id: 101\n"
         "title: Пробежка 7 км\n"
@@ -55,7 +54,7 @@ def tmp_vault():
         "# Пробежка\n",
         encoding="utf-8",
     )
-    (root / "april/ЗАДАЧИ/200-feedback-form.md").write_text(
+    (root / "задачи/april/200-feedback-form.md").write_text(
         "---\n"
         "task_id: 200\n"
         "title: Форма обратной связи\n"

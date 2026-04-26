@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     telegram_bot_token: str
     telegram_owner_id: int = 435926703
 
-    # Obsidian
-    obsidian_root: str = "/Users/andrei_prygunov/obsidian"
+    # Obsidian (vault root = _ЗАДАЧИ/)
+    obsidian_root: str = "/Users/andrei_prygunov/obsidian/_ЗАДАЧИ"
 
     # Google
     gmail_token_path: str = Field(default="~/.gmail-mcp/credentials.json")

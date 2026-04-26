@@ -17,14 +17,13 @@ WEEKDAY_MAP = {"пн": 0, "вт": 1, "ср": 2, "чт": 3, "пт": 4, "сб": 5,
 DASHBOARD_FILE = "ДАШБОРД.md"
 
 DASHBOARD_PROJECTS: list[tuple[str, str]] = [
-    ("/gt24", "GT24 Недвижимость"),
+    ("/life", "Life"),
+    ("/realestate", "Недвижимость (GT24+KAZ)"),
     ("/avgust", "Август"),
     ("/erp", "ERP Август"),
     ("/april", "April"),
     ("/books", "Books"),
     ("/deutsch", "Deutsch"),
-    ("/kaz", "Kaz nach Berlin"),
-    ("/life", "Life"),
 ]
 
 CALLOUT_TYPES = {
@@ -33,17 +32,15 @@ CALLOUT_TYPES = {
     "Когда-нибудь": "note",
 }
 
+# Пути относительно vault root (_ЗАДАЧИ/)
 COMMAND_PATHS = {
-    "/gt24": "gt24realestate.de/ЗАДАЧИ",
-    "/avgust": "avgust/ЗАДАЧИ",
-    "/erp": "avgust/ERP_Avgust/ЗАДАЧИ",
-    "/deutsch": "deutsch/ЗАДАЧИ",
-    "/life": "life/ЗАДАЧИ",
-    "/april": "april/ЗАДАЧИ",
-    "/books": "books/ЗАДАЧИ",
-    "/kaz": "kaz_nach_berlin/ЗАДАЧИ",
-    "/daemon": "telegram-daemon/ЗАДАЧИ",
-    "/assistant": "telegram-assistant/ЗАДАЧИ",
+    "/life": "задачи/life",
+    "/realestate": "задачи/realestate",
+    "/avgust": "задачи/avgust",
+    "/erp": "задачи/avgust-erp",
+    "/deutsch": "задачи/deutsch",
+    "/april": "задачи/april",
+    "/books": "задачи/books",
 }
 
 
@@ -144,7 +141,7 @@ class VaultAdapter:
             "title": title,
             "status": "todo",
             "type": task_type,
-            "project": rel.split("/")[0],
+            "project": rel.split("/")[-1],
             "created": datetime.now().strftime("%Y-%m-%d"),
             "due": due or None,
             "assignee": assignee or None,

@@ -47,7 +47,7 @@ def test_full_task_lifecycle(tmp_vault):
     assert vault.archive_task("life", task_id) is True
     assert vault.find_task_file("life", task_id) is None
 
-    archive_dir = tmp_vault / "life" / "ЗАДАЧИ" / "archive"
+    archive_dir = tmp_vault / "задачи" / "life" / "archive"
     assert archive_dir.exists()
     assert len(list(archive_dir.glob(f"{task_id}-*.md"))) == 1
 
