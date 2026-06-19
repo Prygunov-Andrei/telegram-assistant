@@ -17,16 +17,9 @@ GITHUB_USER="${GITHUB_USER:-Prygunov-Andrei}"
 GIT_REPO_NAME="${GIT_REPO_NAME:-obsidian-tasks}"
 GITHUB_URL="https://${GITHUB_USER}:${GITHUB_PAT}@github.com/${GITHUB_USER}/${GIT_REPO_NAME}.git"
 
-# Пути относительно vault root (_ЗАДАЧИ/) и зеркала
-TASK_DIRS=(
-  "задачи/life"
-  "задачи/realestate"
-  "задачи/avgust"
-  "задачи/avgust-erp"
-  "задачи/april"
-  "задачи/deutsch"
-  "задачи/books"
-)
+# Разделы НЕ хардкодятся — обнаруживаются автоматически как папки задачи/*/
+# (единый источник истины — файловая структура). TASK_DIRS вычисляется ниже,
+# после синхронизации зеркала.
 
 # 0. Regenerate dashboard from current task statuses
 #    (статусы могут меняться вручную в Obsidian — выпадающий список через
@@ -34,13 +27,43 @@ TASK_DIRS=(
 PYTHONPATH="$OBSIDIAN_VAULT/telegram-assistant/vps/task-webapp" \
   python3 -c "from vault import VaultAdapter; VaultAdapter('$OBSIDIAN_VAULT').regenerate_dashboard()" 2>/dev/null || true
 
-# 1. Clone or pull git repo
+echo "[$(date '+%F %T')] sync start"
+
+# 1. Clone, or hard-sync local mirror to origin.
+#    origin/master — единственный источник истины для БАЗЫ: после reset --hard
+#    локальное зеркало никогда не расходится с GitHub, поэтому push (шаг 4)
+#    всегда fast-forward. Именно отсутствие этого приводило к split-brain
+#    (pull --ff-only молча падал, push молча отклонялся → данные застревали).
 if [ ! -d "$GIT_REPO/.git" ]; then
   git clone "$GITHUB_URL" "$GIT_REPO"
+  cd "$GIT_REPO"
 else
   cd "$GIT_REPO"
-  git pull --ff-only origin master 2>/dev/null || true
+  git remote set-url origin "$GITHUB_URL"
+  git fetch origin master
+  git reset --hard origin/master
 fi
+
+# 1b. Авто-обнаружение разделов = папки задачи/*/.
+list_sections() {            # $1 = базовый каталог → печатает имена папок-разделов
+  [ -d "$1/задачи" ] || return 0
+  for p in "$1"/задачи/*/; do [ -d "$p" ] && basename "$p"; done
+}
+# Раздел, который есть в зеркале, но пропал в Obsidian (удалён/переименован
+# пользователем) → удаляем из зеркала, чтобы удаление уехало в GitHub и Mini App.
+# Webapp новые РАЗДЕЛЫ не создаёт, поэтому «лишний» раздел в зеркале = удалённый.
+while IFS= read -r sec; do
+  if [ -n "$sec" ] && [ ! -d "$OBSIDIAN_VAULT/задачи/$sec" ]; then
+    echo "[$(date '+%F %T')] раздел удалён в Obsidian → убираю из зеркала: $sec"
+    rm -rf "${GIT_REPO:?}/задачи/$sec"
+  fi
+done < <(list_sections "$GIT_REPO")
+
+# TASK_DIRS = текущие разделы Obsidian (авторитетный набор папок)
+TASK_DIRS=()
+while IFS= read -r sec; do
+  [ -n "$sec" ] && TASK_DIRS+=("задачи/$sec")
+done < <(list_sections "$OBSIDIAN_VAULT")
 
 # 2. Pull: GitHub → Obsidian (бот → мак)
 for dir in "${TASK_DIRS[@]}"; do
@@ -84,5 +107,11 @@ cd "$GIT_REPO"
 if [ -n "$(git status --porcelain)" ]; then
   git add -A
   git commit -m "sync from Mac: $(date +%Y-%m-%d_%H:%M)" --quiet
-  git push origin master --quiet 2>/dev/null
+  if git push origin master; then
+    echo "[$(date '+%F %T')] push OK ($(git rev-parse --short HEAD))"
+  else
+    echo "[$(date '+%F %T')] push FAILED" >&2
+  fi
+else
+  echo "[$(date '+%F %T')] nothing to sync"
 fi

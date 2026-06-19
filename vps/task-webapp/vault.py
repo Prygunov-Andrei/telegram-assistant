@@ -1,35 +1,24 @@
-"""Vault adapter for Obsidian-format task files (YAML frontmatter)."""
+"""Vault adapter for Obsidian-format task files (YAML frontmatter).
+
+Разделы (проекты) обнаруживаются АВТОМАТИЧЕСКИ: каждая подпапка внутри
+`задачи/` = отдельный раздел. Единственный источник истины — файловая
+структура. Чтобы добавить раздел — создай папку `задачи/<slug>/`; удалить —
+удали папку; переименовать отображаемое имя — впиши `name:` в `_index.md`
+этой папки (иначе показывается имя папки). Порядок — поле `order:` в
+`_index.md` (иначе по алфавиту). Никаких хардкод-списков разделов в коде.
+"""
 from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import yaml
 
 STATUS_CLOSED = {"done", "cancelled"}
 
-COMMAND_PATHS = {
-    "life": "задачи/life",
-    "realestate": "задачи/realestate",
-    "avgust": "задачи/avgust",
-    "erp": "задачи/avgust-erp",
-    "deutsch": "задачи/deutsch",
-    "april": "задачи/april",
-    "books": "задачи/books",
-}
-
-PROJECT_DISPLAY = {
-    "life": "Life",
-    "realestate": "Недвижимость (GT24+KAZ)",
-    "avgust": "Август (организационное)",
-    "erp": "ERP Август",
-    "deutsch": "Deutsch",
-    "april": "April",
-    "books": "Books",
-}
-
-DASHBOARD_ORDER = ["life", "realestate", "avgust", "erp", "deutsch", "books", "april"]
+TASKS_SUBDIR = "задачи"
+# Папки внутри задачи/, которые НЕ являются разделами
+_NOT_A_SECTION = {"archive"}
 
 RU_MONTHS = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"]
 RU_WEEKDAYS = ["понедельник","вторник","среда","четверг","пятница","суббота","воскресенье"]
@@ -50,18 +39,67 @@ def _split_frontmatter(text):
     return data, body
 
 
+def _prettify(slug):
+    """Запасное отображаемое имя из имени папки: 'avgust-erp' -> 'Avgust Erp'."""
+    return slug.replace("-", " ").replace("_", " ").strip().title() or slug
+
+
 class VaultAdapter:
     def __init__(self, root_path):
         self.root = Path(root_path)
 
+    # ── Авто-обнаружение разделов ────────────────────────────
+    def _projects(self):
+        """Список разделов = подпапки задачи/. Читается на КАЖДЫЙ вызов,
+        поэтому добавление/удаление/переименование папки подхватывается сразу.
+        Возвращает упорядоченный список dict: {slug, rel, name, order}."""
+        base = self.root / TASKS_SUBDIR
+        out = []
+        if base.exists():
+            for d in sorted(base.iterdir()):
+                if not d.is_dir():
+                    continue
+                if d.name.startswith(".") or d.name in _NOT_A_SECTION:
+                    continue
+                slug = d.name
+                name = _prettify(slug)
+                order = 1000
+                idx = d / "_index.md"
+                if idx.exists():
+                    try:
+                        fm, _ = _split_frontmatter(idx.read_text(encoding="utf-8"))
+                        if fm.get("name"):
+                            name = str(fm["name"])
+                        if isinstance(fm.get("order"), int):
+                            order = fm["order"]
+                    except Exception:
+                        pass
+                out.append({
+                    "slug": slug,
+                    "rel": f"{TASKS_SUBDIR}/{slug}",
+                    "name": name,
+                    "order": order,
+                })
+        out.sort(key=lambda p: (p["order"], p["name"].lower()))
+        return out
+
+    def _project_map(self):
+        return {p["slug"]: p for p in self._projects()}
+
+    def _rel(self, slug):
+        p = self._project_map().get(slug)
+        return p["rel"] if p else None
+
+    # ── Чтение задач ─────────────────────────────────────────
     def list_tasks(self, project=None, status=None):
-        projects = [project] if project else list(COMMAND_PATHS.keys())
+        pmap = self._project_map()
+        slugs = [project] if project else list(pmap.keys())
         tasks = []
-        for proj in projects:
-            rel = COMMAND_PATHS.get(proj)
-            if not rel:
+        for proj in slugs:
+            p = pmap.get(proj)
+            if not p:
                 continue
-            task_dir = self.root / rel
+            task_dir = self.root / p["rel"]
             if not task_dir.exists():
                 continue
             for fp in sorted(task_dir.glob("*.md")):
@@ -99,8 +137,8 @@ class VaultAdapter:
 
     def project_counts(self, open_only=True):
         result = {}
-        for slug, rel in COMMAND_PATHS.items():
-            task_dir = self.root / rel
+        for p in self._projects():
+            task_dir = self.root / p["rel"]
             count = 0
             if task_dir.exists():
                 for fp in task_dir.glob("*.md"):
@@ -112,14 +150,11 @@ class VaultAdapter:
                     if open_only and fm_status in STATUS_CLOSED:
                         continue
                     count += 1
-            result[slug] = {
-                "name": PROJECT_DISPLAY.get(slug, slug),
-                "count": count,
-            }
+            result[p["slug"]] = {"name": p["name"], "count": count}
         return result
 
     def find_task_file(self, project, task_id):
-        rel = COMMAND_PATHS.get(project)
+        rel = self._rel(project)
         if not rel:
             return None
         task_dir = self.root / rel
@@ -136,15 +171,16 @@ class VaultAdapter:
         return None
 
     def create_task(self, project, title, task_type="org", due="", assignee=""):
-        rel = COMMAND_PATHS.get(project)
+        rel = self._rel(project)
         if not rel:
             raise ValueError(f"Unknown project: {project}")
         task_dir = self.root / rel
         task_dir.mkdir(parents=True, exist_ok=True)
 
+        # Глобальный max id по всем разделам (+ архивы)
         max_id = 0
-        for _, r in COMMAND_PATHS.items():
-            d = self.root / r
+        for p in self._projects():
+            d = self.root / p["rel"]
             if not d.exists():
                 continue
             search = list(d.glob("*.md"))
@@ -270,10 +306,13 @@ class VaultAdapter:
         return True
 
     def regenerate_dashboard(self):
-        """Regenerate ДАШБОРД.md with new schema (recurring, subproject)."""
+        """Regenerate ДАШБОРД.md from current task statuses (разделы — авто)."""
         today = datetime.now()
         date_str = f"{today.day} {RU_MONTHS[today.month-1]}, {RU_WEEKDAYS[today.weekday()]}"
         today_iso = today.strftime("%Y-%m-%d")
+
+        projects = self._projects()
+        pmap = {p["slug"]: p for p in projects}
 
         all_tasks = self.list_tasks()
         open_tasks = [t for t in all_tasks if t.get("status") not in STATUS_CLOSED]
@@ -290,7 +329,8 @@ class VaultAdapter:
         recurring = [t for t in open_tasks if t.get("recurring")]
 
         def wikilink(t):
-            rel = COMMAND_PATHS.get(t["project"], t["project"])
+            p = pmap.get(t["project"])
+            rel = p["rel"] if p else f"{TASKS_SUBDIR}/{t['project']}"
             stem = t["_filename"]
             if stem.endswith(".md"):
                 stem = stem[:-3]
@@ -323,12 +363,12 @@ class VaultAdapter:
             lines.append("\n")
 
         lines.append("---\n\n## По проектам\n\n")
-        for slug in DASHBOARD_ORDER:
+        for p in projects:
+            slug = p["slug"]
             project_tasks = [t for t in open_tasks if t["project"] == slug]
             if not project_tasks:
                 continue
-            display = PROJECT_DISPLAY.get(slug, slug)
-            lines.append(f"### {display} ({len(project_tasks)})\n")
+            lines.append(f"### {p['name']} ({len(project_tasks)})\n")
             project_tasks.sort(
                 key=lambda t: (
                     t.get("due") or "9999-99-99",
